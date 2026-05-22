@@ -3,12 +3,18 @@ import * as XLSX from 'xlsx';
 import { parseDate, toISODate } from './dateUtils.js';
 
 // 시트 이름 → 사업자 표준명 매핑
+// 디네트 시트는 그로븐이 관리하는 B2B 채널이므로 사업자=그로븐으로 귀속
 const SHEET_TO_BUSINESS = {
   '그로븐': '그로븐',
   'YB': '옐로우브릿지',
   '옐로우브릿지': '옐로우브릿지',
-  '디네트': '디네트',
-  '그로스': '그로스'
+  '디네트': '그로븐',
+  '그로스': '그로븐'
+};
+
+// 시트가 B2B 채널 등 특수 채널인 경우 platform을 강제 지정
+const SHEET_TO_PLATFORM = {
+  '디네트': '디네트(B2B)'
 };
 
 // 헤더 별칭 → 표준 필드 매핑
@@ -127,6 +133,10 @@ function parseSheet(ws, sheetName) {
       parseDate(r[colMap.dispatchDate]);
     if (!orderDate) continue;
 
+    // 디네트 시트처럼 platform을 강제 지정해야 하는 경우
+    const forcedPlatform = SHEET_TO_PLATFORM[sheetName];
+    const rawPlatform = colMap.platform !== undefined ? String(r[colMap.platform] || '').trim() : '';
+
     const order = {
       date: toISODate(orderDate),
       dispatchDate: colMap.dispatchDate !== undefined
@@ -135,7 +145,7 @@ function parseSheet(ws, sheetName) {
       business: business || '미지정',
       taxType: colMap.taxType !== undefined ? String(r[colMap.taxType] || '').trim() : '',
       supplier: colMap.supplier !== undefined ? String(r[colMap.supplier] || '').trim() : '',
-      platform: colMap.platform !== undefined ? String(r[colMap.platform] || '').trim() : '',
+      platform: forcedPlatform || rawPlatform,
       product: colMap.product !== undefined ? String(r[colMap.product] || '').trim() : '',
       spec: colMap.spec !== undefined ? String(r[colMap.spec] || '').trim() : '',
       quantity: colMap.quantity !== undefined ? parseNumber(r[colMap.quantity]) || 1 : 1,
