@@ -17,6 +17,18 @@ const SHEET_TO_PLATFORM = {
   '디네트': '디네트(B2B)'
 };
 
+// 채널명 정규화 - 데이터에 섞여 있는 표기를 표준화
+// B2B 업체로 들어온 매출은 (B2B) 표기로 통일하여 일반 플랫폼과 구분
+const PLATFORM_NORMALIZE = {
+  '구룡포황제과메기': '구룡포황제과메기(B2B)'
+};
+
+function normalizePlatform(p) {
+  const trimmed = (p || '').trim();
+  if (!trimmed || trimmed === '-') return '';
+  return PLATFORM_NORMALIZE[trimmed] || trimmed;
+}
+
 // 헤더 별칭 → 표준 필드 매핑
 const FIELD_ALIASES = {
   no: ['번호', 'no', 'idx'],
@@ -133,9 +145,11 @@ function parseSheet(ws, sheetName) {
       parseDate(r[colMap.dispatchDate]);
     if (!orderDate) continue;
 
-    // 디네트 시트처럼 platform을 강제 지정해야 하는 경우
+    // 디네트 시트처럼 platform을 강제 지정해야 하는 경우 (시트 단위 우선)
     const forcedPlatform = SHEET_TO_PLATFORM[sheetName];
-    const rawPlatform = colMap.platform !== undefined ? String(r[colMap.platform] || '').trim() : '';
+    const rawPlatform = normalizePlatform(
+      colMap.platform !== undefined ? String(r[colMap.platform] || '') : ''
+    );
 
     const order = {
       date: toISODate(orderDate),
