@@ -7,7 +7,8 @@ import {
   suggestFeeRate,
   suggestShipping,
   getProductSuggestions,
-  getSpecSuggestions
+  getSpecSuggestions,
+  buildCatalog
 } from '../utils/priceBook.js';
 import { getUniqueValues } from '../utils/analytics.js';
 
@@ -38,6 +39,34 @@ export default function ManualEntry({ rows, onAdd, onDelete }) {
   const platforms = useMemo(() => getUniqueValues(rows, 'platform'), [rows]);
   const products = useMemo(() => getProductSuggestions(rows, ''), [rows]);
   const specs = useMemo(() => getSpecSuggestions(rows, form.product), [rows, form.product]);
+  const catalog = useMemo(() => buildCatalog(rows).slice(0, 12), [rows]);
+
+  // 카탈로그 칩 클릭 → 폼 자동 채움
+  const quickFill = (item) => {
+    // 해당 제품의 가장 최근 주문 1건을 찾아 폼에 적용
+    const recent = rows
+      .filter((r) => r.product === item.product && r.spec === item.spec)
+      .sort((a, b) => b.date.localeCompare(a.date))[0];
+    if (!recent) return;
+    const next = {
+      ...form,
+      business: recent.business || form.business,
+      taxType: recent.taxType || form.taxType,
+      supplier: recent.supplier || '',
+      platform: recent.platform || form.platform,
+      product: recent.product,
+      spec: recent.spec || '',
+      quantity: '1',
+      revenue: String(recent.revenue),
+      cost: String(recent.cost),
+      shipping: String(recent.shipping || 0),
+      fee: String(recent.fee || 0),
+      vat: String(recent.vat || 0),
+      note: ''
+    };
+    setForm(next);
+    recomputeSuggestions(next);
+  };
 
   // 자동 단가 제안 - 폼 값이 바뀔 때마다 재계산
   function recomputeSuggestions(nextForm) {
@@ -146,6 +175,60 @@ export default function ManualEntry({ rows, onAdd, onDelete }) {
           </div>
         </div>
       </div>
+
+      {catalog.length > 0 && (
+        <div
+          style={{
+            marginBottom: 14,
+            padding: 12,
+            background: 'var(--primary-soft)',
+            borderRadius: 8
+          }}
+        >
+          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: 'var(--primary)' }}>
+            ⚡ 자주 입력한 제품 (클릭하면 최근 주문 그대로 채워집니다)
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {catalog.map((item) => (
+              <button
+                key={`${item.product}|${item.spec}`}
+                type="button"
+                onClick={() => quickFill(item)}
+                style={{
+                  background: 'white',
+                  border: '1px solid var(--border)',
+                  borderRadius: 999,
+                  padding: '5px 12px',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4
+                }}
+                title={`${item.orders}건 · 평균 ${item.avgPrice.toLocaleString()}원`}
+              >
+                {item.product}
+                {item.spec && (
+                  <span className="muted" style={{ fontWeight: 400 }}>· {item.spec}</span>
+                )}
+                <span
+                  style={{
+                    background: 'var(--primary)',
+                    color: 'white',
+                    borderRadius: 999,
+                    padding: '0 6px',
+                    fontSize: 10,
+                    marginLeft: 2
+                  }}
+                >
+                  {item.orders}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit}>
         {/* 행 1: 기본 정보 */}

@@ -11,6 +11,8 @@ import DayOverDay from './components/DayOverDay.jsx';
 import FormatGuide from './components/FormatGuide.jsx';
 import ProductAnalysis from './components/ProductAnalysis.jsx';
 import SupplierAnalysis from './components/SupplierAnalysis.jsx';
+import CloudSync from './components/CloudSync.jsx';
+import { createSyncManager, getCloudConfig } from './utils/cloudSync.js';
 import {
   aggregate,
   filterRows,
@@ -49,6 +51,28 @@ export default function App() {
   const [range, setRange] = useState({ from: '', to: '' });
   const [selectedBusinesses, setSelectedBusinesses] = useState([]);
   const [initialized, setInitialized] = useState(false);
+  const [syncStatus, setSyncStatus] = useState(null);
+  const syncManagerRef = React.useRef(null);
+  const rowsRef = React.useRef(rows);
+  React.useEffect(() => { rowsRef.current = rows; }, [rows]);
+
+  // 클라우드 동기화 매니저 초기화
+  React.useEffect(() => {
+    syncManagerRef.current = createSyncManager({
+      getConfig: getCloudConfig,
+      getRows: () => rowsRef.current,
+      onStatus: setSyncStatus
+    });
+  }, []);
+
+  // rows 변경 시 자동 업로드 (debounced 2초)
+  React.useEffect(() => {
+    if (!initialized) return;
+    const cfg = getCloudConfig();
+    if (cfg && cfg.gistId) {
+      syncManagerRef.current?.scheduleSync();
+    }
+  }, [rows, initialized]);
 
   // Persist rows
   useEffect(() => {
@@ -156,12 +180,13 @@ export default function App() {
           </div>
         </div>
         <div className="header-actions">
-          <span className="badge">{rows.length.toLocaleString()}건 보유</span>
+          <span className="badge">{rows.length.toLocaleString()}건</span>
           {dataRange.min && (
             <span className="badge purple">
               {dataRange.min} ~ {dataRange.max}
             </span>
           )}
+          <SyncBadge status={syncStatus} />
         </div>
       </header>
 
@@ -252,6 +277,17 @@ export default function App() {
               onLoad={handleLoad}
               currentRows={rows}
               onClear={handleClear}
+            />
+            <CloudSync
+              rows={rows}
+              onPull={(newRows) => {
+                setRows(newRows);
+                if (newRows.length) {
+                  const r = getDateRange(newRows);
+                  setRange({ from: r.min, to: r.max });
+                  setInitialized(true);
+                }
+              }}
             />
             <FormatGuide />
             <ManualEntry
@@ -354,4 +390,24 @@ function PeriodMarginTable({ data, granularity }) {
 
 function fmt(n) {
   return Math.round(n).toLocaleString('ko-KR');
+}
+
+function SyncBadge({ status }) {
+  if (!status) return null;
+  const map = {
+    syncing: { label: '☁ 동기화 중...', color: '#dbeafe', text: '#2563eb' },
+    synced: { label: '☁ 동기화됨', color: '#dcfce7', text: '#16a34a' },
+    error: { label: '☁ 동기화 실패', color: '#fee2e2', text: '#dc2626' }
+  };
+  const v = map[status.state];
+  if (!v) return null;
+  return (
+    <span
+      className="badge"
+      style={{ background: v.color, color: v.text }}
+      title={status.error || status.updatedAt || ''}
+    >
+      {v.label}
+    </span>
+  );
 }
