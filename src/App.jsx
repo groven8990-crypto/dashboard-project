@@ -7,6 +7,8 @@ import BusinessCompare from './components/BusinessCompare.jsx';
 import DailyReport from './components/DailyReport.jsx';
 import DataUploader from './components/DataUploader.jsx';
 import ManualEntry from './components/ManualEntry.jsx';
+import DayOverDay from './components/DayOverDay.jsx';
+import FormatGuide from './components/FormatGuide.jsx';
 import {
   aggregate,
   filterRows,
@@ -226,6 +228,7 @@ export default function App() {
         {hasData && tab === 'overview' && (
           <>
             <KPICards current={currentAgg} previous={previousAgg} />
+            <DayOverDay rows={rows} dataRange={dataRange} />
             <TrendChart data={periodSeries} granularity={granularity} />
             <MarginAnalysis agg={currentAgg} />
           </>
@@ -257,9 +260,10 @@ export default function App() {
               currentRows={rows}
               onClear={handleClear}
             />
+            <FormatGuide />
             <ManualEntry
               rows={rows}
-              businesses={businesses}
+              businesses={businesses.length ? businesses : ['그로븐', '옐로우브릿지']}
               onAdd={handleManualAdd}
               onDelete={handleManualDelete}
             />

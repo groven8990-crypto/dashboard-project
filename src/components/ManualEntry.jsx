@@ -78,7 +78,7 @@ export default function ManualEntry({ rows, onAdd, onDelete, businesses }) {
               className="input"
               list="biz-list"
               value={form.business}
-              placeholder="사업자A"
+              placeholder="그로븐 / 옐로우브릿지"
               onChange={(e) => setForm({ ...form, business: e.target.value })}
             />
             <datalist id="biz-list">
@@ -87,13 +87,22 @@ export default function ManualEntry({ rows, onAdd, onDelete, businesses }) {
               ))}
             </datalist>
           </Field>
-          <Field label="채널 (선택)">
+          <Field label="채널">
             <input
               className="input"
+              list="ch-list"
               value={form.channel}
-              placeholder="스마트스토어"
+              placeholder="스마트스토어/쿠팡/11번가/지마켓/옥션/톡딜"
               onChange={(e) => setForm({ ...form, channel: e.target.value })}
             />
+            <datalist id="ch-list">
+              <option value="스마트스토어" />
+              <option value="쿠팡" />
+              <option value="11번가" />
+              <option value="지마켓" />
+              <option value="옥션" />
+              <option value="톡딜" />
+            </datalist>
           </Field>
           <Field label="매출">
             <input
@@ -136,7 +145,30 @@ export default function ManualEntry({ rows, onAdd, onDelete, businesses }) {
               onChange={(e) => setForm({ ...form, fee: e.target.value })}
             />
           </Field>
-          <Field label={<>부가세 <button type="button" className="btn sm" onClick={suggestVat} style={{ marginLeft: 4 }}>자동</button></>}>
+          <Field
+            label={
+              <>
+                부가세{' '}
+                <button
+                  type="button"
+                  className="btn sm"
+                  onClick={suggestVat}
+                  style={{ marginLeft: 4 }}
+                  title="과세사업자: 매출의 1/11 자동 계산"
+                >
+                  과세
+                </button>{' '}
+                <button
+                  type="button"
+                  className="btn sm"
+                  onClick={() => setForm({ ...form, vat: '0' })}
+                  title="면세사업자: 0"
+                >
+                  면세
+                </button>
+              </>
+            }
+          >
             <input
               type="number"
               className="input"

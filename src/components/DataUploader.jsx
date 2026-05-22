@@ -39,22 +39,59 @@ export default function DataUploader({ onLoad, currentRows, onClear }) {
   };
 
   const downloadTemplate = () => {
+    const today = new Date().toISOString().slice(0, 10);
     const sample = [
       {
-        date: '2025-01-15',
-        business: '사업자A',
+        date: today,
+        business: '그로븐',
         channel: '스마트스토어',
         revenue: 500000,
         cost: 310000,
         labor: 25000,
         ad: 30000,
         fee: 55000,
-        vat: 45450,
+        vat: 0,
+        note: '면세사업자 - 부가세 0'
+      },
+      {
+        date: today,
+        business: '그로븐',
+        channel: '쿠팡',
+        revenue: 350000,
+        cost: 215000,
+        labor: 18000,
+        ad: 25000,
+        fee: 38000,
+        vat: 0,
+        note: ''
+      },
+      {
+        date: today,
+        business: '옐로우브릿지',
+        channel: '스마트스토어',
+        revenue: 660000,
+        cost: 410000,
+        labor: 30000,
+        ad: 40000,
+        fee: 72000,
+        vat: 60000,
+        note: '과세사업자 - 부가세 매출의 1/11'
+      },
+      {
+        date: today,
+        business: '옐로우브릿지',
+        channel: '11번가',
+        revenue: 220000,
+        cost: 140000,
+        labor: 10000,
+        ad: 15000,
+        fee: 24000,
+        vat: 20000,
         note: ''
       }
     ];
     const csv = exportCSV(sample);
-    downloadFile(csv, 'template_sales.csv', 'text/csv;charset=utf-8;');
+    downloadFile(csv, 'template_그로븐_옐로우브릿지.csv', 'text/csv;charset=utf-8;');
   };
 
   const downloadCurrent = () => {
