@@ -20,12 +20,15 @@ const SHEET_TO_PLATFORM = {
 // 채널명 정규화 - 데이터에 섞여 있는 표기를 표준화
 // B2B 업체로 들어온 매출은 (B2B) 표기로 통일하여 일반 플랫폼과 구분
 const PLATFORM_NORMALIZE = {
-  '구룡포황제과메기': '구룡포황제과메기(B2B)'
+  '구룡포황제과메기': '구룡포황제과메기(B2B)',
+  'G마켓': '지마켓',
+  'g마켓': '지마켓',
+  '네이버': '스마트스토어'
 };
 
 function normalizePlatform(p) {
   const trimmed = (p || '').trim();
-  if (!trimmed || trimmed === '-') return '';
+  if (!trimmed || trimmed === '-') return '기타';
   return PLATFORM_NORMALIZE[trimmed] || trimmed;
 }
 
