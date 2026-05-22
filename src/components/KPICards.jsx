@@ -1,5 +1,5 @@
 import React from 'react';
-import { fmtKRW, fmtPct, fmtDelta } from '../utils/format.js';
+import { fmtKRW, fmtPct, fmtNum, fmtDelta } from '../utils/format.js';
 
 function Card({ label, value, sub, delta, accent }) {
   return (
@@ -19,26 +19,27 @@ function Card({ label, value, sub, delta, accent }) {
 export default function KPICards({ current, previous }) {
   const dRevenue = previous ? fmtDelta(current.revenue, previous.revenue) : null;
   const dMargin = previous ? fmtDelta(current.margin, previous.margin) : null;
-  const dCost = previous ? fmtDelta(current.cost, previous.cost) : null;
+  const dOrders = previous ? fmtDelta(current.orderCount, previous.orderCount) : null;
 
   return (
     <div className="kpi-grid">
       <Card
         label="매출"
         value={fmtKRW(current.revenue)}
+        sub={`${fmtNum(current.orderCount)}건 · 객단가 ${fmtKRW(current.avgOrderValue)}`}
         delta={dRevenue}
         accent="blue"
       />
       <Card
-        label="매입"
-        value={fmtKRW(current.cost)}
-        delta={dCost}
+        label="매입 + 배송비"
+        value={fmtKRW(current.cost + current.shipping)}
+        sub={`매입 ${fmtKRW(current.cost)} · 배송 ${fmtKRW(current.shipping)}`}
         accent="orange"
       />
       <Card
         label="순마진액"
         value={fmtKRW(current.margin)}
-        sub="매출 - 매입 - 인건비 - 광고비 - 수수료 - 부가세"
+        sub="매출 − (매입 + 배송 + 인건 + 광고 + 수수료 + 부가세)"
         delta={dMargin}
         accent="green"
       />
@@ -49,11 +50,10 @@ export default function KPICards({ current, previous }) {
         accent="purple"
       />
       <Card
-        label="총비용"
-        value={fmtKRW(
-          current.cost + current.labor + current.ad + current.fee + current.vat
-        )}
-        sub={`인건비 ${fmtKRW(current.labor)} · 광고 ${fmtKRW(current.ad)}`}
+        label="주문건수"
+        value={fmtNum(current.orderCount)}
+        sub={`수량 ${fmtNum(current.quantity)}개`}
+        delta={dOrders}
         accent="red"
       />
     </div>

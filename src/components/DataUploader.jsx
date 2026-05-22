@@ -12,14 +12,18 @@ export default function DataUploader({ onLoad, currentRows, onClear }) {
     if (!files || !files.length) return;
     try {
       setStatus({ type: 'info', msg: '파일 파싱 중...' });
-      const { rows, warnings } = await parseFile(files[0]);
+      const result = await parseFile(files[0]);
+      const { rows, warnings, sheetInfo } = result;
       if (!rows.length) {
         setStatus({ type: 'error', msg: '인식 가능한 데이터가 없습니다.' });
         return;
       }
       onLoad(rows, { append: false });
       setWarnings(warnings || []);
-      setStatus({ type: 'success', msg: `${rows.length}건을 불러왔습니다.` });
+      const sheetMsg = sheetInfo && sheetInfo.length
+        ? ' (' + sheetInfo.map((s) => `${s.business}: ${s.count}건`).join(', ') + ')'
+        : '';
+      setStatus({ type: 'success', msg: `총 ${rows.length}건 불러왔습니다.${sheetMsg}` });
     } catch (e) {
       setStatus({ type: 'error', msg: e.message });
     }

@@ -1,5 +1,11 @@
 // Date parsing & period helpers (ISO yyyy-mm-dd as canonical)
 
+function expandYear(y) {
+  const n = Number(y);
+  if (n < 100) return n < 70 ? 2000 + n : 1900 + n;
+  return n;
+}
+
 export function parseDate(input) {
   if (!input) return null;
   if (input instanceof Date) return isNaN(input) ? null : input;
@@ -15,17 +21,39 @@ export function parseDate(input) {
     return isNaN(d) ? null : d;
   }
 
-  // yyyy-mm-dd, yyyy/mm/dd, yyyy.mm.dd
-  let m = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  // yyyymmdd
+  let m = s.match(/^(\d{4})(\d{2})(\d{2})$/);
   if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
 
-  // yyyymmdd
-  m = s.match(/^(\d{4})(\d{2})(\d{2})$/);
+  // yyyy-mm-dd, yyyy/mm/dd, yyyy.mm.dd (4-digit year)
+  m = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
   if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
+
+  // yy-m-d or yy/m/d or yy.m.d (2-digit year first, like 25-12-30, 26-1-21)
+  m = s.match(/^(\d{2})[-/.](\d{1,2})[-/.](\d{1,2})(?!\d)/);
+  if (m) {
+    const y = expandYear(m[1]);
+    const month = +m[2];
+    const day = +m[3];
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      return new Date(y, month - 1, day);
+    }
+  }
 
   // mm/dd/yyyy
   m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})/);
   if (m) return new Date(+m[3], +m[1] - 1, +m[2]);
+
+  // mm/dd/yy or m/d/yy (US style with 2-digit year, like 12/30/25, 3/29/26)
+  m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2})(?!\d)/);
+  if (m) {
+    const month = +m[1];
+    const day = +m[2];
+    const y = expandYear(m[3]);
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      return new Date(y, month - 1, day);
+    }
+  }
 
   const d = new Date(s);
   return isNaN(d) ? null : d;

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { fmtKRW, fmtPct, fmtDelta } from '../utils/format.js';
-import { aggregate, groupByBusiness, groupByChannel } from '../utils/analytics.js';
+import { aggregate, groupByBusiness, groupByPlatform } from '../utils/analytics.js';
 import { todayISO, addDays, fmtKDate, parseDate } from '../utils/dateUtils.js';
 
 export default function DailyReport({ rows, dataRange }) {
@@ -32,7 +32,7 @@ export default function DailyReport({ rows, dataRange }) {
   const mtd = aggregate(mtdRows);
 
   const byBusiness = groupByBusiness(todayRows);
-  const byChannel = groupByChannel(todayRows);
+  const byChannel = groupByPlatform(todayRows).map((p) => ({ ...p, channel: p.platform }));
 
   const dRev = fmtDelta(today.revenue, yesterday.revenue);
   const dRevW = fmtDelta(today.revenue, lastWeek.revenue);

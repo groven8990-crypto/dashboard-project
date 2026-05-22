@@ -12,11 +12,12 @@ import {
   LabelList
 } from 'recharts';
 import { fmtKRW, fmtPct, fmtKRWShort } from '../utils/format.js';
-import { groupByBusiness, groupByChannel } from '../utils/analytics.js';
+import { groupByBusiness, groupByPlatform } from '../utils/analytics.js';
 
 const BIZ_COLORS = {
   그로븐: '#16a34a',
-  옐로우브릿지: '#f59e0b'
+  옐로우브릿지: '#f59e0b',
+  디네트: '#7c3aed'
 };
 const CHANNEL_COLORS = ['#2563eb', '#dc2626', '#7c3aed', '#0ea5e9', '#f97316', '#84cc16', '#ec4899'];
 
@@ -26,7 +27,7 @@ function getBizColor(name) {
 
 export default function BusinessCompare({ rows }) {
   const byBusiness = groupByBusiness(rows);
-  const byChannel = groupByChannel(rows);
+  const byChannel = groupByPlatform(rows).map((p) => ({ ...p, channel: p.platform }));
 
   return (
     <>

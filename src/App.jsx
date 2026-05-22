@@ -9,6 +9,8 @@ import DataUploader from './components/DataUploader.jsx';
 import ManualEntry from './components/ManualEntry.jsx';
 import DayOverDay from './components/DayOverDay.jsx';
 import FormatGuide from './components/FormatGuide.jsx';
+import ProductAnalysis from './components/ProductAnalysis.jsx';
+import SupplierAnalysis from './components/SupplierAnalysis.jsx';
 import {
   aggregate,
   filterRows,
@@ -19,8 +21,8 @@ import {
 } from './utils/analytics.js';
 import { todayISO } from './utils/dateUtils.js';
 
-const STORAGE_KEY = 'sales-dashboard:rows:v1';
-const PREFS_KEY = 'sales-dashboard:prefs:v1';
+const STORAGE_KEY = 'sales-dashboard:rows:v2';
+const PREFS_KEY = 'sales-dashboard:prefs:v2';
 
 function loadStored() {
   try {
@@ -150,7 +152,7 @@ export default function App() {
         <div>
           <h1>매출·마진 대시보드</h1>
           <div className="subtitle">
-            온라인판매 유통 · 2개 사업자 통합 관리 · 일/주/월/연 마진 분석
+            온라인판매 유통 · 사업자/채널/제품/매입처별 주문 분석 · 일/주/월/연 마진
           </div>
         </div>
         <div className="header-actions">
@@ -164,36 +166,13 @@ export default function App() {
       </header>
 
       <nav className="tabs">
-        <button
-          className={`tab ${tab === 'overview' ? 'active' : ''}`}
-          onClick={() => setTab('overview')}
-        >
-          📊 종합 대시보드
-        </button>
-        <button
-          className={`tab ${tab === 'margin' ? 'active' : ''}`}
-          onClick={() => setTab('margin')}
-        >
-          💰 마진 구조 분석
-        </button>
-        <button
-          className={`tab ${tab === 'compare' ? 'active' : ''}`}
-          onClick={() => setTab('compare')}
-        >
-          🏢 사업자·채널 비교
-        </button>
-        <button
-          className={`tab ${tab === 'daily' ? 'active' : ''}`}
-          onClick={() => setTab('daily')}
-        >
-          📋 일일 매출 보고
-        </button>
-        <button
-          className={`tab ${tab === 'data' ? 'active' : ''}`}
-          onClick={() => setTab('data')}
-        >
-          📥 데이터 관리
-        </button>
+        <button className={`tab ${tab === 'overview' ? 'active' : ''}`} onClick={() => setTab('overview')}>📊 종합</button>
+        <button className={`tab ${tab === 'margin' ? 'active' : ''}`} onClick={() => setTab('margin')}>💰 마진 구조</button>
+        <button className={`tab ${tab === 'compare' ? 'active' : ''}`} onClick={() => setTab('compare')}>🏢 사업자·채널</button>
+        <button className={`tab ${tab === 'product' ? 'active' : ''}`} onClick={() => setTab('product')}>📦 제품 분석</button>
+        <button className={`tab ${tab === 'supplier' ? 'active' : ''}`} onClick={() => setTab('supplier')}>🏭 매입처 분석</button>
+        <button className={`tab ${tab === 'daily' ? 'active' : ''}`} onClick={() => setTab('daily')}>📋 일일 보고</button>
+        <button className={`tab ${tab === 'data' ? 'active' : ''}`} onClick={() => setTab('data')}>📥 데이터 관리</button>
       </nav>
 
       <main className="main">
@@ -249,6 +228,20 @@ export default function App() {
           </>
         )}
 
+        {hasData && tab === 'product' && (
+          <>
+            <KPICards current={currentAgg} previous={previousAgg} />
+            <ProductAnalysis rows={filtered} />
+          </>
+        )}
+
+        {hasData && tab === 'supplier' && (
+          <>
+            <KPICards current={currentAgg} previous={previousAgg} />
+            <SupplierAnalysis rows={filtered} />
+          </>
+        )}
+
         {hasData && tab === 'daily' && (
           <DailyReport rows={rows} dataRange={dataRange} />
         )}
@@ -263,7 +256,6 @@ export default function App() {
             <FormatGuide />
             <ManualEntry
               rows={rows}
-              businesses={businesses.length ? businesses : ['그로븐', '옐로우브릿지']}
               onAdd={handleManualAdd}
               onDelete={handleManualDelete}
             />
@@ -280,13 +272,14 @@ function PeriodMarginTable({ data, granularity }) {
     (s, d) => ({
       revenue: s.revenue + d.revenue,
       cost: s.cost + d.cost,
+      shipping: s.shipping + (d.shipping || 0),
       labor: s.labor + d.labor,
       ad: s.ad + d.ad,
       fee: s.fee + d.fee,
       vat: s.vat + d.vat,
       margin: s.margin + d.margin
     }),
-    { revenue: 0, cost: 0, labor: 0, ad: 0, fee: 0, vat: 0, margin: 0 }
+    { revenue: 0, cost: 0, shipping: 0, labor: 0, ad: 0, fee: 0, vat: 0, margin: 0 }
   );
   const totalRate = totals.revenue ? (totals.margin / totals.revenue) * 100 : 0;
 
@@ -314,6 +307,7 @@ function PeriodMarginTable({ data, granularity }) {
               <th>{periodName}</th>
               <th>매출</th>
               <th>매입</th>
+              <th>배송비</th>
               <th>인건비</th>
               <th>광고비</th>
               <th>수수료</th>
@@ -328,6 +322,7 @@ function PeriodMarginTable({ data, granularity }) {
                 <td><strong>{d.period}</strong></td>
                 <td className="num">{fmt(d.revenue)}</td>
                 <td className="num">{fmt(d.cost)}</td>
+                <td className="num">{fmt(d.shipping || 0)}</td>
                 <td className="num">{fmt(d.labor)}</td>
                 <td className="num">{fmt(d.ad)}</td>
                 <td className="num">{fmt(d.fee)}</td>
@@ -342,6 +337,7 @@ function PeriodMarginTable({ data, granularity }) {
               <td>합계</td>
               <td className="num">{fmt(totals.revenue)}</td>
               <td className="num">{fmt(totals.cost)}</td>
+              <td className="num">{fmt(totals.shipping)}</td>
               <td className="num">{fmt(totals.labor)}</td>
               <td className="num">{fmt(totals.ad)}</td>
               <td className="num">{fmt(totals.fee)}</td>
