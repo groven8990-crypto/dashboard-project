@@ -616,7 +616,6 @@ export default function ManualEntry({ rows, onAdd, onDelete, onBulkSetDispatch, 
                     <th style={{ textAlign: 'right' }}>수량</th>
                     <th style={{ textAlign: 'right' }}>매출</th>
                     <th style={{ textAlign: 'right' }}>매입가</th>
-                    <th style={{ textAlign: 'right' }}>매입계</th>
                     <th style={{ textAlign: 'right' }}>매입배송비</th>
                     <th style={{ textAlign: 'right' }}>부가세</th>
                     <th style={{ textAlign: 'right' }}>마진</th>
@@ -626,8 +625,7 @@ export default function ManualEntry({ rows, onAdd, onDelete, onBulkSetDispatch, 
                 <tbody>
                   {pageRows.map(({ r, idx }) => {
                     const qty = r.quantity || 1;
-                    const costTotal = (r.cost || 0) * qty;
-                    const margin = r.revenue - costTotal - (r.shipping || 0) - (r.fee || 0) - (r.vat || 0);
+                    const margin = r.revenue - (r.cost || 0) - (r.shipping || 0) - (r.fee || 0) - (r.vat || 0);
                     return (
                       <tr key={idx} style={{ background: editingIdx === idx ? 'var(--primary-soft)' : (selected.has(idx) ? 'var(--bg-page)' : undefined) }}>
                         <td>
@@ -645,7 +643,6 @@ export default function ManualEntry({ rows, onAdd, onDelete, onBulkSetDispatch, 
                         <td className="num">{qty}</td>
                         <td className="num">{fmtKRW(r.revenue)}</td>
                         <td className="num">{fmtKRW(r.cost)}</td>
-                        <td className="num">{fmtKRW(costTotal)}</td>
                         <td className="num" style={{ color: (r.shipping || 0) > 0 ? 'var(--warning)' : 'var(--muted)' }}>
                           {(r.shipping || 0) > 0 ? fmtKRW(r.shipping) : '—'}
                         </td>
@@ -719,8 +716,7 @@ function SuggestChip({ value, samples, onClick }) {
 
 function MarginPreview({ form }) {
   const rev = Number(form.revenue) || 0;
-  const qty = Number(form.quantity) || 1;
-  const cost = (Number(form.cost) || 0) * qty;
+  const cost = Number(form.cost) || 0;
   const ship = Number(form.shipping) || 0;
   const fee = Number(form.fee) || 0;
   const vat = Number(form.vat) || 0;

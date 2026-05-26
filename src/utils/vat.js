@@ -1,5 +1,5 @@
 // 부가세 계산 규칙 (입력 폼 / 일괄계산 공용)
-// 부가세 = 매출부가세(주문금액÷11) − 매입부가세(매입계÷11)
+// 부가세 = 매출부가세(주문금액÷11) − 매입부가세(매입가÷11)
 // - 면세 사업자(매출 면세): 부가세 0
 // - 매입 면세(농수산물 등): 매입부가세 0
 
@@ -15,7 +15,6 @@ export function computeRowVat(row, purchaseExempt) {
   if (row.taxType === '면세') return 0;
   const salesVat = Math.round((row.revenue || 0) / 11);
   const pExempt = purchaseExempt == null ? guessPurchaseExempt(row.supplier) : purchaseExempt;
-  const lineCost = (row.cost || 0) * (row.quantity || 1);
-  const purchaseVat = pExempt ? 0 : Math.round(lineCost / 11);
+  const purchaseVat = pExempt ? 0 : Math.round((row.cost || 0) / 11);
   return salesVat - purchaseVat;
 }

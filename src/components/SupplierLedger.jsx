@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { fmtKRW, fmtNum } from '../utils/format.js';
 import { orderKey, CS_STATUSES } from '../utils/csInfo.js';
-import { lineCost } from '../utils/analytics.js';
 
 function fmt(n) {
   return Math.round(n || 0).toLocaleString('ko-KR');
@@ -29,7 +28,7 @@ export default function SupplierLedger({ rows, csInfo = {}, onCsChange }) {
       const g = map.get(s);
       g.orders++;
       g.revenue += r.revenue || 0;
-      g.cost += lineCost(r);
+      g.cost += r.cost || 0;
       g.shipping += r.shipping || 0;
       g.fee += r.fee || 0;
     }
@@ -58,7 +57,7 @@ export default function SupplierLedger({ rows, csInfo = {}, onCsChange }) {
       (s, r) => ({
         orders: s.orders + 1,
         revenue: s.revenue + (r.revenue || 0),
-        cost: s.cost + lineCost(r),
+        cost: s.cost + (r.cost || 0),
         shipping: s.shipping + (r.shipping || 0),
         fee: s.fee + (r.fee || 0)
       }),
@@ -213,8 +212,8 @@ export default function SupplierLedger({ rows, csInfo = {}, onCsChange }) {
                     <td style={{ color: 'var(--muted)' }}>{r.spec || ''}</td>
                     <td className="num">{r.quantity || 1}</td>
                     <td className="num">{fmt(r.revenue)}</td>
-                    <td className="num" style={{ color: r.cost > 0 ? undefined : 'var(--muted)' }} title={r.cost > 0 ? `단가 ${fmt(r.cost)} × ${r.quantity || 1}` : ''}>
-                      {r.cost > 0 ? fmt(lineCost(r)) : '—'}
+                    <td className="num" style={{ color: r.cost > 0 ? undefined : 'var(--muted)' }}>
+                      {r.cost > 0 ? fmt(r.cost) : '—'}
                     </td>
                     <td className="num" style={{ color: (r.shipping || 0) > 0 ? 'var(--warning)' : 'var(--muted)' }}>
                       {(r.shipping || 0) > 0 ? fmt(r.shipping) : '—'}
