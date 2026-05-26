@@ -11,6 +11,7 @@ import {
   buildCatalog
 } from '../utils/priceBook.js';
 import { getUniqueValues } from '../utils/analytics.js';
+import { guessPurchaseExempt } from '../utils/vat.js';
 
 const EMPTY = {
   date: todayISO(),
@@ -32,15 +33,9 @@ const EMPTY = {
   note: ''
 };
 
-// 농수산물 등 면세 매입처 추정 (매입부가세 0). 기본값일 뿐 체크박스로 수정 가능.
-const SUPPLIER_VAT_EXEMPT = /농협|수협|영어조합|작목반|수산|농산|축협|축산|농원/;
-function guessPurchaseExempt(supplier) {
-  return SUPPLIER_VAT_EXEMPT.test(String(supplier || ''));
-}
-
 const PAGE_SIZE = 50;
 
-export default function ManualEntry({ rows, onAdd, onDelete, onBulkSetDispatch }) {
+export default function ManualEntry({ rows, onAdd, onDelete, onBulkSetDispatch, onAutoVat }) {
   const [form, setForm] = useState(EMPTY);
   const [editingIdx, setEditingIdx] = useState(null);
   const [suggestions, setSuggestions] = useState({});
@@ -245,7 +240,20 @@ export default function ManualEntry({ rows, onAdd, onDelete, onBulkSetDispatch }
   };
   const applyBulkDispatch = () => {
     if (!selected.size || !bulkDispatch || !onBulkSetDispatch) return;
+    if (!confirm(`선택한 ${selected.size.toLocaleString()}건의 발주일자를 ${bulkDispatch}(으)로 변경합니다.\n진행할까요?`)) return;
     onBulkSetDispatch([...selected], bulkDispatch);
+    setSelected(new Set());
+  };
+
+  const taxableCount = useMemo(() => rows.filter((r) => r.taxType === '과세').length, [rows]);
+  const autoVatAll = () => {
+    if (!onAutoVat) return;
+    if (!confirm(`과세로 등록된 ${taxableCount}건의 부가세를 매출부가세−매입부가세로 자동 계산해 채웁니다.\n(매입처가 농수산 면세면 매입부가세는 0)\n진행할까요?`)) return;
+    onAutoVat(null);
+  };
+  const autoVatSelected = () => {
+    if (!onAutoVat || !selected.size) return;
+    onAutoVat([...selected]);
     setSelected(new Set());
   };
 
@@ -536,6 +544,9 @@ export default function ManualEntry({ rows, onAdd, onDelete, onBulkSetDispatch }
             <div className="card-subtitle">
               전체 주문 {rows.length.toLocaleString()}건 · 필터 결과 {total.toLocaleString()}건
             </div>
+            <button className="btn sm" style={{ marginTop: 6 }} onClick={autoVatAll}>
+              ⚡ 과세 {taxableCount.toLocaleString()}건 부가세 자동계산
+            </button>
           </div>
           <div className="filter-group" style={{ flexWrap: 'wrap', gap: 6 }}>
             <input type="date" className="input" value={listFilter.from}
@@ -576,6 +587,7 @@ export default function ManualEntry({ rows, onAdd, onDelete, onBulkSetDispatch }
             <input type="date" className="input" value={bulkDispatch}
               onChange={(e) => setBulkDispatch(e.target.value)} style={{ width: 160 }} />
             <button className="btn primary sm" onClick={applyBulkDispatch}>선택 건 발주일자 적용</button>
+            <button className="btn sm" onClick={autoVatSelected}>부가세 자동계산</button>
             <button className="btn sm" onClick={() => setSelected(new Set())}>선택 해제</button>
           </div>
         )}

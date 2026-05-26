@@ -21,6 +21,7 @@ import { createSyncManager, getCloudConfig } from './utils/cloudSync.js';
 import { loadAdCosts, saveAdCosts, applyAdCosts } from './utils/adCosts.js';
 import { loadBizInfo, saveBizInfo } from './utils/bizInfo.js';
 import { loadCsInfo, saveCsInfo } from './utils/csInfo.js';
+import { computeRowVat } from './utils/vat.js';
 import {
   aggregate,
   filterRows,
@@ -69,6 +70,8 @@ export default function App() {
   const [reportView, setReportView] = useState('daily');
   // 분석/보고 기준일: 'dispatch'(발주일, 기본) | 'order'(주문일)
   const [dateBasis, setDateBasis] = useState(() => loadPrefs().dateBasis || 'dispatch');
+  // 일괄/삭제 등 위험 작업 직전 스냅샷 (한 단계 되돌리기)
+  const [undoSnapshot, setUndoSnapshot] = useState(null);
   const [granularity, setGranularity] = useState('day');
   const [range, setRange] = useState({ from: '', to: '' });
   const [selectedBusinesses, setSelectedBusinesses] = useState([]);
@@ -243,17 +246,39 @@ export default function App() {
 
   const handleManualDelete = (idx) => {
     if (!confirm('이 행을 삭제하시겠습니까?')) return;
+    setUndoSnapshot(rows);
     setRows((prev) => prev.filter((_, i) => i !== idx));
   };
 
   // 선택한 주문들의 발주일자 일괄 수정
   const handleBulkSetDispatch = (indices, dispatchDate) => {
     const set = new Set(indices);
+    setUndoSnapshot(rows);
     setRows((prev) => prev.map((r, i) => (set.has(i) ? { ...r, dispatchDate } : r)));
+  };
+
+  // 과세 건 부가세 자동 계산 (indices가 없으면 전체 과세 건)
+  const handleAutoVat = (indices) => {
+    const set = indices ? new Set(indices) : null;
+    setUndoSnapshot(rows);
+    setRows((prev) =>
+      prev.map((r, i) => {
+        if (set && !set.has(i)) return r;
+        if (r.taxType !== '과세') return r;
+        return { ...r, vat: computeRowVat(r) };
+      })
+    );
+  };
+
+  const handleUndo = () => {
+    if (!undoSnapshot) return;
+    setRows(undoSnapshot);
+    setUndoSnapshot(null);
   };
 
   const handleClear = () => {
     if (!confirm('저장된 모든 데이터를 삭제하시겠습니까?')) return;
+    setUndoSnapshot(rows);
     setRows([]);
     setRange({ from: '', to: '' });
     setInitialized(false);
@@ -271,6 +296,16 @@ export default function App() {
           </div>
         </div>
         <div className="header-actions">
+          {undoSnapshot && (
+            <button
+              className="btn"
+              style={{ background: 'var(--warning-soft)', color: 'var(--warning)', fontWeight: 700 }}
+              onClick={handleUndo}
+              title="방금 일괄 변경/삭제를 되돌립니다"
+            >
+              ↶ 방금 작업 되돌리기
+            </button>
+          )}
           <span className="badge">{rows.length.toLocaleString()}건</span>
           {dataRange.min && (
             <span className="badge purple">
@@ -437,6 +472,7 @@ export default function App() {
                 onAdd={handleManualAdd}
                 onDelete={handleManualDelete}
                 onBulkSetDispatch={handleBulkSetDispatch}
+                onAutoVat={handleAutoVat}
               />
             )}
 
