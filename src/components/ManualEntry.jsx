@@ -120,9 +120,14 @@ export default function ManualEntry({ rows, onAdd, onDelete }) {
     }
   };
 
-  // 부가세 자동 (과세사업자: 매출/11)
+  // 부가세 = 매출부가세(주문금액÷11) − 매입부가세(매입가÷11)
+  const salesVat = Math.round((Number(form.revenue) || 0) / 11);
+  const purchaseVat = Math.round((Number(form.cost) || 0) / 11);
+  const vatSuggest = salesVat - purchaseVat;
+
+  // 부가세 자동 (과세사업자: 매출부가세 − 매입부가세)
   const autoVat = () => {
-    if (form.revenue) update({ vat: String(Math.round(Number(form.revenue) / 11)) });
+    update({ vat: String(vatSuggest) });
   };
 
   // 사업자 선택 시 면세/과세 자동 설정
@@ -358,6 +363,33 @@ export default function ManualEntry({ rows, onAdd, onDelete }) {
                 <button type="button" className="btn sm" onClick={autoVat}>과세</button>{' '}
                 <button type="button" className="btn sm" onClick={() => update({ vat: '0' })}>면세</button>
               </>
+            }
+            hint={
+              form.taxType === '면세' ? (
+                <span className="muted text-xs">면세 사업자 → 부가세 0원</span>
+              ) : (
+                <div className="text-xs" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
+                  {(form.revenue || form.cost) ? (
+                    <button
+                      type="button"
+                      onClick={() => applySuggestion('vat', vatSuggest)}
+                      style={{
+                        background: 'var(--primary-soft)', color: 'var(--primary)', border: 'none',
+                        padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 600, cursor: 'pointer'
+                      }}
+                      title="매출부가세 − 매입부가세"
+                    >
+                      💡 추천: {fmtKRW(vatSuggest)}
+                    </button>
+                  ) : null}
+                  <span className="muted">
+                    매출부가세(주문금액÷11) − 매입부가세(매입가÷11)
+                    {(form.revenue || form.cost)
+                      ? ` = ${fmtKRW(salesVat)} − ${fmtKRW(purchaseVat)}`
+                      : ''}
+                  </span>
+                </div>
+              )
             }
           >
             <input type="number" className="input" value={form.vat}
