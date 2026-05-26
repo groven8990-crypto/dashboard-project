@@ -26,6 +26,7 @@ const EMPTY = {
   shipping: '',
   fee: '',
   vat: '',
+  ad: '',
   note: ''
 };
 
@@ -151,11 +152,11 @@ export default function ManualEntry({ rows, onAdd, onDelete }) {
       fee: Number(form.fee) || 0,
       vat: Number(form.vat) || 0,
       labor: 0,
-      ad: 0,
+      ad: Number(form.ad) || 0,
       note: form.note.trim()
     };
     onAdd(row, editingIdx);
-    const reset = { ...EMPTY, date: form.date, business: form.business, platform: form.platform };
+    const reset = { ...EMPTY, date: form.date, business: form.business, platform: form.platform, ad: '' };
     setForm(reset);
     setEditingIdx(null);
     setSuggestions({});
@@ -363,6 +364,10 @@ export default function ManualEntry({ rows, onAdd, onDelete }) {
             <input type="number" className="input" value={form.vat}
               onChange={(e) => update({ vat: e.target.value })} />
           </Field>
+          <Field label="광고비">
+            <input type="number" className="input" value={form.ad} placeholder="0"
+              onChange={(e) => update({ ad: e.target.value })} />
+          </Field>
         </div>
 
         {/* 행 4: 비고 */}
@@ -430,7 +435,7 @@ export default function ManualEntry({ rows, onAdd, onDelete }) {
                             quantity: String(r.quantity || 1),
                             revenue: String(r.revenue), cost: String(r.cost),
                             shipping: String(r.shipping || 0), fee: String(r.fee || 0),
-                            vat: String(r.vat || 0), note: r.note || ''
+                            vat: String(r.vat || 0), ad: String(r.ad || 0), note: r.note || ''
                           });
                           setEditingIdx(realIdx);
                           recomputeSuggestions({ product: r.product, spec: r.spec, platform: r.platform, supplier: r.supplier });
@@ -496,7 +501,8 @@ function MarginPreview({ form }) {
   const ship = Number(form.shipping) || 0;
   const fee = Number(form.fee) || 0;
   const vat = Number(form.vat) || 0;
-  const margin = rev - cost - ship - fee - vat;
+  const ad = Number(form.ad) || 0;
+  const margin = rev - cost - ship - fee - vat - ad;
   const rate = rev ? (margin / rev) * 100 : 0;
   if (!rev) return null;
   return (
@@ -510,7 +516,9 @@ function MarginPreview({ form }) {
         fontSize: 13,
         fontWeight: 600,
         display: 'flex',
-        justifyContent: 'space-between'
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: 4
       }}
     >
       <span>
@@ -518,6 +526,7 @@ function MarginPreview({ form }) {
       </span>
       <span style={{ fontSize: 11, fontWeight: 500 }}>
         매출 {fmtKRW(rev)} − 매입 {fmtKRW(cost)} − 배송 {fmtKRW(ship)} − 수수료 {fmtKRW(fee)} − 부가세 {fmtKRW(vat)}
+        {ad > 0 && ` − 광고비 ${fmtKRW(ad)}`}
       </span>
     </div>
   );
