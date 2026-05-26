@@ -42,7 +42,11 @@ export default function DataUploader({ onLoad, currentRows, onClear }) {
         const dup = withCost.length - deduped.length;
         const noCost = deduped.filter((r) => !(r.cost > 0)).length;
 
-        onLoad(deduped, { append: true });
+        // 주문수집 파일을 등록하는 날 = 발주일. 발주일자가 없으면 오늘로 설정.
+        const today = new Date().toISOString().slice(0, 10);
+        const dated = deduped.map((r) => ({ ...r, dispatchDate: r.dispatchDate || today }));
+
+        onLoad(dated, { append: true });
         const w = [...(warnings || [])];
         if (noCost > 0) {
           w.push(`매입가를 못 채운 ${noCost}건은 0원입니다. "주문 한 건 입력"의 수정 또는 과거 데이터 보강 후 다시 올려주세요.`);

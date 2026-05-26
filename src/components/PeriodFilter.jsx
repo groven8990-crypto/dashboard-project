@@ -18,7 +18,9 @@ export default function PeriodFilter({
   dataRange,
   businesses,
   selectedBusinesses,
-  onBusinessesChange
+  onBusinessesChange,
+  dateBasis,
+  onDateBasisChange
 }) {
   const applyPreset = (preset) => {
     if (preset.id === 'all') {
@@ -31,6 +33,28 @@ export default function PeriodFilter({
 
   return (
     <div className="toolbar">
+      {onDateBasisChange && (
+        <div className="filter-group">
+          <label>기준일</label>
+          <div className="segmented">
+            <button
+              className={dateBasis === 'dispatch' ? 'active' : ''}
+              onClick={() => onDateBasisChange('dispatch')}
+              title="발주일자(발주일이 없으면 주문일자) 기준으로 집계"
+            >
+              발주일
+            </button>
+            <button
+              className={dateBasis === 'order' ? 'active' : ''}
+              onClick={() => onDateBasisChange('order')}
+              title="고객이 주문한 날짜 기준으로 집계"
+            >
+              주문일
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="filter-group">
         <label>기간 단위</label>
         <div className="segmented">

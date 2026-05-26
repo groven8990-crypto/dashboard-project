@@ -14,6 +14,7 @@ import { getUniqueValues } from '../utils/analytics.js';
 
 const EMPTY = {
   date: todayISO(),
+  dispatchDate: '',
   business: '',
   taxType: '',
   supplier: '',
@@ -166,7 +167,7 @@ export default function ManualEntry({ rows, onAdd, onDelete }) {
     e.preventDefault();
     const row = {
       date: form.date,
-      dispatchDate: '',
+      dispatchDate: form.dispatchDate || '',
       business: form.business.trim() || '미지정',
       taxType: form.taxType,
       supplier: form.supplier.trim(),
@@ -222,7 +223,7 @@ export default function ManualEntry({ rows, onAdd, onDelete }) {
 
   const startEdit = (r, idx) => {
     setForm({
-      date: r.date, business: r.business, taxType: r.taxType || '',
+      date: r.date, dispatchDate: r.dispatchDate || '', business: r.business, taxType: r.taxType || '',
       supplier: r.supplier || '', platform: r.platform || '',
       product: r.product || '', spec: r.spec || '',
       quantity: String(r.quantity || 1),
@@ -305,9 +306,13 @@ export default function ManualEntry({ rows, onAdd, onDelete }) {
       <form onSubmit={handleSubmit}>
         {/* 행 1: 기본 정보 */}
         <div className="form-grid">
-          <Field label="주문일">
+          <Field label="주문일 (고객 주문)">
             <input type="date" className="input" required value={form.date}
               onChange={(e) => update({ date: e.target.value })} />
+          </Field>
+          <Field label="발주일 (보고 기준)">
+            <input type="date" className="input" value={form.dispatchDate}
+              onChange={(e) => update({ dispatchDate: e.target.value })} />
           </Field>
           <Field label="사업자">
             <input className="input" list="biz-list" value={form.business} placeholder="그로븐 / 옐로우브릿지"
@@ -530,7 +535,8 @@ export default function ManualEntry({ rows, onAdd, onDelete }) {
               <table className="table" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
                 <thead>
                   <tr>
-                    <th>날짜</th>
+                    <th>주문일</th>
+                    <th>발주일</th>
                     <th>사업자</th>
                     <th>과세</th>
                     <th>매입처</th>
@@ -551,6 +557,7 @@ export default function ManualEntry({ rows, onAdd, onDelete }) {
                     return (
                       <tr key={idx} style={{ background: editingIdx === idx ? 'var(--primary-soft)' : undefined }}>
                         <td>{r.date}</td>
+                        <td>{r.dispatchDate || '—'}</td>
                         <td>{r.business}</td>
                         <td className="muted">{r.taxType || ''}</td>
                         <td>{r.supplier || ''}</td>

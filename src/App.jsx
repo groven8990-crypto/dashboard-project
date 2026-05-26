@@ -67,6 +67,8 @@ export default function App() {
   const [tab, setTab] = useState('overview');
   const [dataView, setDataView] = useState('orders');
   const [reportView, setReportView] = useState('daily');
+  // 분석/보고 기준일: 'dispatch'(발주일, 기본) | 'order'(주문일)
+  const [dateBasis, setDateBasis] = useState(() => loadPrefs().dateBasis || 'dispatch');
   const [granularity, setGranularity] = useState('day');
   const [range, setRange] = useState({ from: '', to: '' });
   const [selectedBusinesses, setSelectedBusinesses] = useState([]);
@@ -134,11 +136,30 @@ export default function App() {
     setCsInfo((prev) => ({ ...prev, [key]: { ...(prev[key] || {}), ...patch } }));
   };
 
-  // 월별 광고비를 일할계산하여 반영한 분석용 행
-  const effectiveRows = useMemo(() => applyAdCosts(rows, adCosts), [rows, adCosts]);
+  // 월별 광고비를 일할계산 + 분석 기준일 적용한 분석용 행
+  // 발주일 기준이면 발주일자가 있는 행은 발주일자를 분석 기준일(date)로 사용하고
+  // 원래 주문일자는 orderDate로 보존한다. (주문 관리 목록은 원본 rows를 사용)
+  const effectiveRows = useMemo(() => {
+    const withAd = applyAdCosts(rows, adCosts);
+    if (dateBasis === 'order') return withAd;
+    return withAd.map((r) =>
+      r.dispatchDate ? { ...r, orderDate: r.date, date: r.dispatchDate } : r
+    );
+  }, [rows, adCosts, dateBasis]);
 
-  const dataRange = useMemo(() => getDateRange(rows), [rows]);
+  const dataRange = useMemo(() => getDateRange(effectiveRows), [effectiveRows]);
   const businesses = useMemo(() => getUniqueValues(rows, 'business'), [rows]);
+
+  // 기준일 전환 시 기간 필터를 새 기준의 데이터 범위로 재설정 (최초 마운트는 건너뜀)
+  const basisInitRef = React.useRef(false);
+  useEffect(() => {
+    if (!basisInitRef.current) { basisInitRef.current = true; return; }
+    const base = dateBasis === 'order'
+      ? rows
+      : rows.map((r) => (r.dispatchDate ? { ...r, date: r.dispatchDate } : r));
+    const rg = getDateRange(base);
+    if (rg.min) setRange({ from: rg.min, to: rg.max });
+  }, [dateBasis]);
 
   // Initialize default range from data
   useEffect(() => {
@@ -157,9 +178,9 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(
       PREFS_KEY,
-      JSON.stringify({ range, granularity, selectedBusinesses })
+      JSON.stringify({ range, granularity, selectedBusinesses, dateBasis })
     );
-  }, [range, granularity, selectedBusinesses]);
+  }, [range, granularity, selectedBusinesses, dateBasis]);
 
   const filtered = useMemo(
     () =>
@@ -290,6 +311,8 @@ export default function App() {
             businesses={businesses}
             selectedBusinesses={selectedBusinesses}
             onBusinessesChange={setSelectedBusinesses}
+            dateBasis={dateBasis}
+            onDateBasisChange={setDateBasis}
           />
         )}
 
