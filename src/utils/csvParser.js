@@ -534,6 +534,64 @@ export async function parseFile(file) {
   throw new Error('지원하지 않는 파일 형식입니다. (CSV/XLSX/XLS만 가능)');
 }
 
+// 매칭용 키 정규화 - 공백/괄호/대소문자 차이를 무시
+function matchKey(s) {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/[()（）]/g, '')
+    .replace(/\s+/g, '');
+}
+
+// 파일(fileRows)의 매입가·매입배송비를 기존 데이터(existingRows)에 덮어쓴다.
+// 매칭 기준: 수취인명 + 주소 (동일 수취인+주소에 여러 제품이면 제품명으로 추가 구분)
+// 반환: { rows, updated, unmatched }
+export function mergeCostShipping(existingRows, fileRows) {
+  const byFull = new Map();      // 수취인|주소|제품|규격
+  const byProduct = new Map();   // 수취인|주소|제품
+  const byNameAddr = new Map();  // 수취인|주소 (값이 엇갈리면 'AMBIG')
+
+  for (const f of fileRows) {
+    if (!(f.cost > 0)) continue; // 매입가 없는 행은 덮어쓰기 대상에서 제외
+    const rk = matchKey(f.recipient);
+    const ak = matchKey(f.address);
+    if (!rk || !ak) continue;
+    const val = { cost: f.cost || 0, shipping: f.shipping || 0 };
+    const pk = matchKey(f.product);
+    const sk = matchKey(f.spec);
+
+    const setFirst = (m, k) => { if (!m.has(k)) m.set(k, val); };
+    setFirst(byFull, `${rk}|${ak}|${pk}|${sk}`);
+    setFirst(byProduct, `${rk}|${ak}|${pk}`);
+
+    const nk = `${rk}|${ak}`;
+    if (!byNameAddr.has(nk)) byNameAddr.set(nk, val);
+    else {
+      const ex = byNameAddr.get(nk);
+      if (ex !== 'AMBIG' && (ex.cost !== val.cost || ex.shipping !== val.shipping)) {
+        byNameAddr.set(nk, 'AMBIG');
+      }
+    }
+  }
+
+  let updated = 0;
+  const rows = existingRows.map((r) => {
+    const rk = matchKey(r.recipient);
+    const ak = matchKey(r.address);
+    if (!rk || !ak) return r;
+    const naHit = byNameAddr.get(`${rk}|${ak}`);
+    const hit =
+      byFull.get(`${rk}|${ak}|${matchKey(r.product)}|${matchKey(r.spec)}`) ||
+      byProduct.get(`${rk}|${ak}|${matchKey(r.product)}`) ||
+      (naHit && naHit !== 'AMBIG' ? naHit : null);
+    if (!hit) return r;
+    if (r.cost === hit.cost && (r.shipping || 0) === (hit.shipping || 0)) return r;
+    updated++;
+    return { ...r, cost: hit.cost, shipping: hit.shipping };
+  });
+
+  return { rows, updated, unmatched: existingRows.length - updated };
+}
+
 export function exportCSV(rows) {
   const csv = Papa.unparse(
     rows.map((r) => ({

@@ -1,14 +1,43 @@
 import React, { useRef, useState } from 'react';
-import { parseFile, exportCSV } from '../utils/csvParser.js';
+import { parseFile, exportCSV, mergeCostShipping } from '../utils/csvParser.js';
 import { suggestCost } from '../utils/priceBook.js';
 import { generateSampleData } from '../data/sampleData.js';
 
-export default function DataUploader({ onLoad, currentRows, onClear }) {
+export default function DataUploader({ onLoad, onMergeUpdate, currentRows, onClear }) {
   const inputRef = useRef(null);
+  const mergeInputRef = useRef(null);
   const [dragging, setDragging] = useState(false);
   const [status, setStatus] = useState(null);
   const [warnings, setWarnings] = useState([]);
   const [dispatchDate, setDispatchDate] = useState(() => new Date().toISOString().slice(0, 10));
+
+  // 파일의 매입가·매입배송비만 기존 데이터에 덮어쓰기 (이름+주소 매칭)
+  const handleMergeFile = async (files) => {
+    if (!files || !files.length) return;
+    try {
+      setWarnings([]);
+      setStatus({ type: 'info', msg: '파일 파싱 중...' });
+      const { rows: fileRows } = await parseFile(files[0]);
+      if (!fileRows.length) {
+        setStatus({ type: 'error', msg: '인식 가능한 데이터가 없습니다.' });
+        return;
+      }
+      const { rows, updated, unmatched } = mergeCostShipping(currentRows, fileRows);
+      if (updated === 0) {
+        setStatus({ type: 'error', msg: `매칭되는 주문이 없습니다. (수취인명+주소 기준, 파일 ${fileRows.length}건)` });
+        return;
+      }
+      onMergeUpdate(rows);
+      const w = [];
+      if (unmatched > 0) w.push(`기존 데이터 중 ${unmatched.toLocaleString()}건은 파일에서 매칭되지 않아 그대로 유지됩니다.`);
+      setWarnings(w);
+      setStatus({ type: 'success', msg: `✅ 매입가·매입배송비 덮어쓰기 완료 — ${updated.toLocaleString()}건 갱신` });
+    } catch (e) {
+      setStatus({ type: 'error', msg: e.message });
+    } finally {
+      if (mergeInputRef.current) mergeInputRef.current.value = '';
+    }
+  };
 
   const handleFiles = async (files) => {
     if (!files || !files.length) return;
@@ -160,10 +189,26 @@ export default function DataUploader({ onLoad, currentRows, onClear }) {
           <button className="btn" onClick={loadSample}>🧪 샘플 데이터 로드</button>
           {currentRows.length > 0 && (
             <>
+              {onMergeUpdate && (
+                <button
+                  className="btn"
+                  onClick={() => mergeInputRef.current?.click()}
+                  title="업로드한 파일의 매입가·매입배송비만 기존 데이터에 덮어씁니다 (수취인명+주소 매칭)"
+                >
+                  🔧 매입가·배송비만 덮어쓰기
+                </button>
+              )}
               <button className="btn" onClick={downloadCurrent}>⬇️ 현재 데이터 내보내기</button>
               <button className="btn danger" onClick={onClear}>🗑️ 전체 삭제</button>
             </>
           )}
+          <input
+            ref={mergeInputRef}
+            type="file"
+            accept=".csv,.xlsx,.xls,.txt"
+            style={{ display: 'none' }}
+            onChange={(e) => handleMergeFile(e.target.files)}
+          />
         </div>
       </div>
 

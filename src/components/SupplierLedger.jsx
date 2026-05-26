@@ -1,12 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { fmtKRW, fmtNum } from '../utils/format.js';
-import { orderKey, CS_STATUSES } from '../utils/csInfo.js';
+import { orderKey } from '../utils/csInfo.js';
 
 function fmt(n) {
   return Math.round(n || 0).toLocaleString('ko-KR');
 }
 
-export default function SupplierLedger({ rows, csInfo = {}, onCsChange }) {
+export default function SupplierLedger({ rows }) {
   const [selectedSupplier, setSelectedSupplier] = useState('');
   const [sortField, setSortField] = useState('date');
   const [sortAsc, setSortAsc] = useState(false);
@@ -149,7 +149,7 @@ export default function SupplierLedger({ rows, csInfo = {}, onCsChange }) {
               )}
             </div>
             <div className="card-subtitle">
-              {detailRows.length.toLocaleString()}건 · 주문자 인적사항·송장번호·CS를 한 줄에서 관리하세요
+              {detailRows.length.toLocaleString()}건 · 거래처별 매입가·매입배송비·수수료 정산 (CS는 CS 관리 탭에서)
             </div>
           </div>
           <div className="filter-group">
@@ -188,9 +188,6 @@ export default function SupplierLedger({ rows, csInfo = {}, onCsChange }) {
                 <th>수취인</th>
                 <th>연락처</th>
                 <th>주소</th>
-                <th>송장번호</th>
-                <th>CS상태</th>
-                <th>CS메모</th>
                 <th>주문번호</th>
                 <th>판매처</th>
               </tr>
@@ -198,8 +195,6 @@ export default function SupplierLedger({ rows, csInfo = {}, onCsChange }) {
             <tbody>
               {detailRows.map((r, i) => {
                 const key = orderKey(r);
-                const cs = csInfo[key] || {};
-                const invoiceVal = cs.invoice !== undefined ? cs.invoice : (r.invoice || '');
                 return (
                   <tr key={key || i}>
                     <td>
@@ -227,39 +222,6 @@ export default function SupplierLedger({ rows, csInfo = {}, onCsChange }) {
                     >
                       {r.address || '—'}
                     </td>
-                    <td>
-                      <input
-                        className="input"
-                        style={{ width: 130, fontSize: 12, padding: '2px 6px' }}
-                        placeholder="송장번호"
-                        value={invoiceVal}
-                        disabled={!onCsChange}
-                        onChange={(e) => onCsChange && onCsChange(key, { invoice: e.target.value })}
-                      />
-                    </td>
-                    <td>
-                      <select
-                        className="select"
-                        style={{ fontSize: 12, padding: '2px 6px' }}
-                        value={cs.csStatus || ''}
-                        disabled={!onCsChange}
-                        onChange={(e) => onCsChange && onCsChange(key, { csStatus: e.target.value })}
-                      >
-                        {CS_STATUSES.map((s) => (
-                          <option key={s} value={s}>{s || '—'}</option>
-                        ))}
-                      </select>
-                    </td>
-                    <td>
-                      <input
-                        className="input"
-                        style={{ width: 160, fontSize: 12, padding: '2px 6px' }}
-                        placeholder="CS 메모"
-                        value={cs.csMemo || ''}
-                        disabled={!onCsChange}
-                        onChange={(e) => onCsChange && onCsChange(key, { csMemo: e.target.value })}
-                      />
-                    </td>
                     <td style={{ color: 'var(--muted)' }}>{r.orderNo || ''}</td>
                     <td>{r.platform || ''}</td>
                   </tr>
@@ -276,7 +238,7 @@ export default function SupplierLedger({ rows, csInfo = {}, onCsChange }) {
                   <strong>{fmt(detailTotals.shipping)}</strong>
                 </td>
                 <td className="num"><strong>{fmt(detailTotals.fee)}</strong></td>
-                <td colSpan={8} />
+                <td colSpan={5} />
               </tr>
             </tfoot>
           </table>

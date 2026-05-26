@@ -13,6 +13,7 @@ import FormatGuide from './components/FormatGuide.jsx';
 import ProductAnalysis from './components/ProductAnalysis.jsx';
 import SupplierAnalysis from './components/SupplierAnalysis.jsx';
 import SupplierLedger from './components/SupplierLedger.jsx';
+import CsManager from './components/CsManager.jsx';
 import CloudSync from './components/CloudSync.jsx';
 import AdCostManager from './components/AdCostManager.jsx';
 import BizInfoManager from './components/BizInfoManager.jsx';
@@ -236,6 +237,12 @@ export default function App() {
     }
   };
 
+  // 업로드 파일의 매입가·매입배송비만 기존 데이터에 덮어쓰기 (되돌리기 가능)
+  const handleMergeUpdate = (mergedRows) => {
+    setUndoSnapshot(rows);
+    setRows(mergedRows);
+  };
+
   const handleManualAdd = (row, editingIdx) => {
     if (editingIdx !== null && editingIdx !== undefined) {
       setRows((prev) => prev.map((r, i) => (i === editingIdx ? row : r)));
@@ -323,6 +330,7 @@ export default function App() {
         <button className={`tab ${tab === 'product' ? 'active' : ''}`} onClick={() => setTab('product')}>📦 제품 분석</button>
         <button className={`tab ${tab === 'supplier' ? 'active' : ''}`} onClick={() => setTab('supplier')}>🏭 매입처 분석</button>
         <button className={`tab ${tab === 'ledger' ? 'active' : ''}`} onClick={() => setTab('ledger')}>🧾 거래처 정산</button>
+        <button className={`tab ${tab === 'cs' ? 'active' : ''}`} onClick={() => setTab('cs')}>🎧 CS 관리</button>
         <button className={`tab ${tab === 'daily' ? 'active' : ''}`} onClick={() => setTab('daily')}>📋 매출 보고</button>
         <button className={`tab ${tab === 'data' ? 'active' : ''}`} onClick={() => setTab('data')}>📥 데이터 관리</button>
       </nav>
@@ -342,7 +350,7 @@ export default function App() {
           </div>
         )}
 
-        {hasData && tab !== 'data' && tab !== 'daily' && (
+        {hasData && tab !== 'data' && tab !== 'daily' && tab !== 'cs' && (
           <PeriodFilter
             granularity={granularity}
             onGranularityChange={setGranularity}
@@ -397,7 +405,11 @@ export default function App() {
         )}
 
         {hasData && tab === 'ledger' && (
-          <SupplierLedger rows={filtered} csInfo={csInfo} onCsChange={handleCsChange} />
+          <SupplierLedger rows={filtered} />
+        )}
+
+        {hasData && tab === 'cs' && (
+          <CsManager rows={rows} csInfo={csInfo} onCsChange={handleCsChange} />
         )}
 
         {hasData && tab === 'daily' && (
@@ -440,6 +452,7 @@ export default function App() {
               <>
                 <DataUploader
                   onLoad={handleLoad}
+                  onMergeUpdate={handleMergeUpdate}
                   currentRows={rows}
                   onClear={handleClear}
                 />
