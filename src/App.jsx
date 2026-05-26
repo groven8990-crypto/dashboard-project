@@ -15,6 +15,7 @@ import SupplierAnalysis from './components/SupplierAnalysis.jsx';
 import SupplierLedger from './components/SupplierLedger.jsx';
 import CloudSync from './components/CloudSync.jsx';
 import AdCostManager from './components/AdCostManager.jsx';
+import { normalizeSupplier } from './utils/csvParser.js';
 import { createSyncManager, getCloudConfig } from './utils/cloudSync.js';
 import { loadAdCosts, saveAdCosts, applyAdCosts } from './utils/adCosts.js';
 import {
@@ -30,10 +31,17 @@ import { todayISO } from './utils/dateUtils.js';
 const STORAGE_KEY = 'sales-dashboard:rows:v2';
 const PREFS_KEY = 'sales-dashboard:prefs:v2';
 
+// 기존에 저장된 데이터의 거래처명도 표준명으로 통일 (푸드엔/푸드앤 등 병합)
+function migrateSuppliers(rows) {
+  return Array.isArray(rows)
+    ? rows.map((r) => ({ ...r, supplier: normalizeSupplier(r.supplier) }))
+    : [];
+}
+
 function loadStored() {
   try {
     const v = localStorage.getItem(STORAGE_KEY);
-    return v ? JSON.parse(v) : [];
+    return v ? migrateSuppliers(JSON.parse(v)) : [];
   } catch {
     return [];
   }
@@ -333,7 +341,8 @@ export default function App() {
             <CloudSync
               rows={rows}
               adCosts={adCosts}
-              onPull={(newRows, newAdCosts) => {
+              onPull={(pulledRows, newAdCosts) => {
+                const newRows = migrateSuppliers(pulledRows);
                 setRows(newRows);
                 if (Array.isArray(newAdCosts)) setAdCosts(newAdCosts);
                 if (newRows.length) {

@@ -38,6 +38,24 @@ const STORE_TO_BUSINESS = {
   '자꾸가게': '옐로우브릿지'
 };
 
+// 거래처(매입처) 이름 정규화 - 표기 변형/법인 접두어를 정확한 사업자명으로 통일.
+// 예) "푸드엔"·"푸드앤" → "(주)푸드엔드베스트" (같은 회사)
+// 키는 (주)/㈜/주식회사/공백을 제거한 형태로 비교한다. 새 거래처는 여기에 추가.
+const SUPPLIER_CANONICAL = {
+  '푸드엔': '(주)푸드엔드베스트',
+  '푸드앤': '(주)푸드엔드베스트',
+  '푸드엔드베스트': '(주)푸드엔드베스트',
+  '일비': '주식회사 일비',
+  '해담별': '주식회사 해담별'
+};
+
+export function normalizeSupplier(name) {
+  const raw = String(name || '').trim();
+  if (!raw) return '';
+  const key = raw.replace(/\(주\)|㈜|주식회사|\(유\)|유한회사/g, '').replace(/\s+/g, '');
+  return SUPPLIER_CANONICAL[key] || raw;
+}
+
 // "지마켓-로또상회" → { platform: '지마켓', store: '로또상회' }
 function parseAccountAlias(alias) {
   const s = String(alias || '').trim();
@@ -234,7 +252,7 @@ function parseSheet(ws, sheetName) {
         : '',
       business: business || '미지정',
       taxType: colMap.taxType !== undefined ? String(r[colMap.taxType] || '').trim() : '',
-      supplier: colMap.supplier !== undefined ? String(r[colMap.supplier] || '').trim() : '',
+      supplier: colMap.supplier !== undefined ? normalizeSupplier(r[colMap.supplier]) : '',
       platform: forcedPlatform || rawPlatform,
       product: colMap.product !== undefined ? String(r[colMap.product] || '').trim() : '',
       spec: colMap.spec !== undefined ? String(r[colMap.spec] || '').trim() : '',
@@ -309,7 +327,8 @@ function parseRawOrderSheet(json, headerIdx) {
   for (const r of dataRows) {
     const orderDate = parseDate(c.date >= 0 ? r[c.date] : '');
     const { platform, store } = parseAccountAlias(c.alias >= 0 ? r[c.alias] : '');
-    const { supplier, product: codeProduct } = parseSellerCode(c.code >= 0 ? r[c.code] : '');
+    const { supplier: rawSupplier, product: codeProduct } = parseSellerCode(c.code >= 0 ? r[c.code] : '');
+    const supplier = normalizeSupplier(rawSupplier);
     const business = STORE_TO_BUSINESS[store] || store || '미지정';
 
     const pName = String(c.productName >= 0 ? r[c.productName] : '');
@@ -428,7 +447,7 @@ function normalizeRowsLegacy(rawRows) {
       dispatchDate: colMap.dispatchDate && r[colMap.dispatchDate] ? (parseDate(r[colMap.dispatchDate]) ? toISODate(parseDate(r[colMap.dispatchDate])) : '') : '',
       business: String(r[colMap.business] || '미지정').trim() || '미지정',
       taxType: String(r[colMap.taxType] || '').trim(),
-      supplier: String(r[colMap.supplier] || '').trim(),
+      supplier: normalizeSupplier(r[colMap.supplier]),
       platform: String(r[colMap.platform] || '').trim(),
       product: String(r[colMap.product] || '').trim(),
       spec: String(r[colMap.spec] || '').trim(),
