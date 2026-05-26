@@ -5,6 +5,7 @@ import TrendChart from './components/TrendChart.jsx';
 import MarginAnalysis from './components/MarginAnalysis.jsx';
 import BusinessCompare from './components/BusinessCompare.jsx';
 import DailyReport from './components/DailyReport.jsx';
+import MonthlyReport from './components/MonthlyReport.jsx';
 import DataUploader from './components/DataUploader.jsx';
 import ManualEntry from './components/ManualEntry.jsx';
 import DayOverDay from './components/DayOverDay.jsx';
@@ -47,6 +48,7 @@ function loadPrefs() {
 export default function App() {
   const [rows, setRows] = useState(loadStored);
   const [tab, setTab] = useState('overview');
+  const [reportView, setReportView] = useState('daily');
   const [granularity, setGranularity] = useState('day');
   const [range, setRange] = useState({ from: '', to: '' });
   const [selectedBusinesses, setSelectedBusinesses] = useState([]);
@@ -196,7 +198,7 @@ export default function App() {
         <button className={`tab ${tab === 'compare' ? 'active' : ''}`} onClick={() => setTab('compare')}>🏢 사업자·채널</button>
         <button className={`tab ${tab === 'product' ? 'active' : ''}`} onClick={() => setTab('product')}>📦 제품 분석</button>
         <button className={`tab ${tab === 'supplier' ? 'active' : ''}`} onClick={() => setTab('supplier')}>🏭 매입처 분석</button>
-        <button className={`tab ${tab === 'daily' ? 'active' : ''}`} onClick={() => setTab('daily')}>📋 일일 보고</button>
+        <button className={`tab ${tab === 'daily' ? 'active' : ''}`} onClick={() => setTab('daily')}>📋 매출 보고</button>
         <button className={`tab ${tab === 'data' ? 'active' : ''}`} onClick={() => setTab('data')}>📥 데이터 관리</button>
       </nav>
 
@@ -268,7 +270,29 @@ export default function App() {
         )}
 
         {hasData && tab === 'daily' && (
-          <DailyReport rows={rows} dataRange={dataRange} />
+          <>
+            <div className="toolbar no-print" style={{ marginBottom: 4 }}>
+              <div className="filter-group">
+                <button
+                  className={`tab ${reportView === 'daily' ? 'active' : ''}`}
+                  onClick={() => setReportView('daily')}
+                >
+                  📅 일일 보고
+                </button>
+                <button
+                  className={`tab ${reportView === 'monthly' ? 'active' : ''}`}
+                  onClick={() => setReportView('monthly')}
+                >
+                  🗓️ 월간 보고
+                </button>
+              </div>
+            </div>
+            {reportView === 'daily' ? (
+              <DailyReport rows={rows} dataRange={dataRange} />
+            ) : (
+              <MonthlyReport rows={rows} dataRange={dataRange} />
+            )}
+          </>
         )}
 
         {tab === 'data' && (
