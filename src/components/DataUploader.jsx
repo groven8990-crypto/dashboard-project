@@ -8,6 +8,7 @@ export default function DataUploader({ onLoad, currentRows, onClear }) {
   const [dragging, setDragging] = useState(false);
   const [status, setStatus] = useState(null);
   const [warnings, setWarnings] = useState([]);
+  const [dispatchDate, setDispatchDate] = useState(() => new Date().toISOString().slice(0, 10));
 
   const handleFiles = async (files) => {
     if (!files || !files.length) return;
@@ -42,9 +43,9 @@ export default function DataUploader({ onLoad, currentRows, onClear }) {
         const dup = withCost.length - deduped.length;
         const noCost = deduped.filter((r) => !(r.cost > 0)).length;
 
-        // 주문수집 파일을 등록하는 날 = 발주일. 발주일자가 없으면 오늘로 설정.
-        const today = new Date().toISOString().slice(0, 10);
-        const dated = deduped.map((r) => ({ ...r, dispatchDate: r.dispatchDate || today }));
+        // 주문수집 파일의 발주일자 = 업로드 시 지정한 발주일자 (없으면 오늘)
+        const dispatch = dispatchDate || new Date().toISOString().slice(0, 10);
+        const dated = deduped.map((r) => ({ ...r, dispatchDate: r.dispatchDate || dispatch }));
 
         onLoad(dated, { append: true });
         const w = [...(warnings || [])];
@@ -164,6 +165,22 @@ export default function DataUploader({ onLoad, currentRows, onClear }) {
             </>
           )}
         </div>
+      </div>
+
+      <div className="filter-group" style={{ marginBottom: 12, alignItems: 'center' }}>
+        <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>
+          발주일자 (이번에 올리는 주문수집 파일에 적용)
+        </label>
+        <input
+          type="date"
+          className="input"
+          value={dispatchDate}
+          onChange={(e) => setDispatchDate(e.target.value)}
+          style={{ width: 170 }}
+        />
+        <span className="text-xs muted">
+          주문수집(원본) 파일을 올릴 때 이 날짜가 발주일자로 기록됩니다. (요약 파일은 파일의 발주일자 사용)
+        </span>
       </div>
 
       <div

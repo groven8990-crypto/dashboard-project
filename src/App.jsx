@@ -149,6 +149,7 @@ export default function App() {
 
   const dataRange = useMemo(() => getDateRange(effectiveRows), [effectiveRows]);
   const businesses = useMemo(() => getUniqueValues(rows, 'business'), [rows]);
+  const suppliers = useMemo(() => getUniqueValues(rows, 'supplier'), [rows]);
 
   // 기준일 전환 시 기간 필터를 새 기준의 데이터 범위로 재설정 (최초 마운트는 건너뜀)
   const basisInitRef = React.useRef(false);
@@ -388,13 +389,41 @@ export default function App() {
           <>
             <div className="toolbar no-print" style={{ marginBottom: 8 }}>
               <div className="filter-group">
+                <button className={`tab ${dataView === 'io' ? 'active' : ''}`} onClick={() => setDataView('io')}>📥 가져오기·내보내기·동기화</button>
                 <button className={`tab ${dataView === 'orders' ? 'active' : ''}`} onClick={() => setDataView('orders')}>📋 주문 관리</button>
-                <button className={`tab ${dataView === 'biz' ? 'active' : ''}`} onClick={() => setDataView('biz')}>🏢 사업자 정보</button>
-                <button className={`tab ${dataView === 'io' ? 'active' : ''}`} onClick={() => setDataView('io')}>📥 가져오기·내보내기</button>
-                <button className={`tab ${dataView === 'ad' ? 'active' : ''}`} onClick={() => setDataView('ad')}>📣 광고비</button>
-                <button className={`tab ${dataView === 'cloud' ? 'active' : ''}`} onClick={() => setDataView('cloud')}>☁️ 클라우드 동기화</button>
+                <button className={`tab ${dataView === 'biz' ? 'active' : ''}`} onClick={() => setDataView('biz')}>🏢 거래처 정보</button>
               </div>
             </div>
+
+            {dataView === 'io' && (
+              <>
+                <DataUploader
+                  onLoad={handleLoad}
+                  currentRows={rows}
+                  onClear={handleClear}
+                />
+                <CloudSync
+                  rows={rows}
+                  adCosts={adCosts}
+                  bizInfo={bizInfo}
+                  csInfo={csInfo}
+                  onPull={(pulledRows, newAdCosts, newBizInfo, newCsInfo) => {
+                    const newRows = migrateSuppliers(pulledRows);
+                    setRows(newRows);
+                    if (Array.isArray(newAdCosts)) setAdCosts(newAdCosts);
+                    if (Array.isArray(newBizInfo)) setBizInfo(newBizInfo);
+                    if (newCsInfo && typeof newCsInfo === 'object') setCsInfo(newCsInfo);
+                    if (newRows.length) {
+                      const r = getDateRange(newRows);
+                      setRange({ from: r.min, to: r.max });
+                      setInitialized(true);
+                    }
+                  }}
+                />
+                <AdCostManager rows={rows} adCosts={adCosts} onChange={setAdCosts} />
+                <FormatGuide />
+              </>
+            )}
 
             {dataView === 'orders' && (
               <ManualEntry
@@ -405,43 +434,7 @@ export default function App() {
             )}
 
             {dataView === 'biz' && (
-              <BizInfoManager businesses={businesses} bizInfo={bizInfo} onChange={setBizInfo} />
-            )}
-
-            {dataView === 'io' && (
-              <>
-                <DataUploader
-                  onLoad={handleLoad}
-                  currentRows={rows}
-                  onClear={handleClear}
-                />
-                <FormatGuide />
-              </>
-            )}
-
-            {dataView === 'ad' && (
-              <AdCostManager rows={rows} adCosts={adCosts} onChange={setAdCosts} />
-            )}
-
-            {dataView === 'cloud' && (
-              <CloudSync
-                rows={rows}
-                adCosts={adCosts}
-                bizInfo={bizInfo}
-                csInfo={csInfo}
-                onPull={(pulledRows, newAdCosts, newBizInfo, newCsInfo) => {
-                  const newRows = migrateSuppliers(pulledRows);
-                  setRows(newRows);
-                  if (Array.isArray(newAdCosts)) setAdCosts(newAdCosts);
-                  if (Array.isArray(newBizInfo)) setBizInfo(newBizInfo);
-                  if (newCsInfo && typeof newCsInfo === 'object') setCsInfo(newCsInfo);
-                  if (newRows.length) {
-                    const r = getDateRange(newRows);
-                    setRange({ from: r.min, to: r.max });
-                    setInitialized(true);
-                  }
-                }}
-              />
+              <BizInfoManager suppliers={suppliers} bizInfo={bizInfo} onChange={setBizInfo} />
             )}
           </>
         )}
