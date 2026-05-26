@@ -14,6 +14,7 @@ import { getUniqueValues } from '../utils/analytics.js';
 
 const EMPTY = {
   date: todayISO(),
+  orderTime: '',
   dispatchDate: '',
   business: '',
   taxType: '',
@@ -39,12 +40,14 @@ function guessPurchaseExempt(supplier) {
 
 const PAGE_SIZE = 50;
 
-export default function ManualEntry({ rows, onAdd, onDelete }) {
+export default function ManualEntry({ rows, onAdd, onDelete, onBulkSetDispatch }) {
   const [form, setForm] = useState(EMPTY);
   const [editingIdx, setEditingIdx] = useState(null);
   const [suggestions, setSuggestions] = useState({});
   const [listFilter, setListFilter] = useState({ from: '', to: '', q: '', business: '', supplier: '', platform: '' });
   const [page, setPage] = useState(0);
+  const [selected, setSelected] = useState(() => new Set());
+  const [bulkDispatch, setBulkDispatch] = useState(() => new Date().toISOString().slice(0, 10));
 
   const businesses = useMemo(() => getUniqueValues(rows, 'business'), [rows]);
   const suppliers = useMemo(() => getUniqueValues(rows, 'supplier'), [rows]);
@@ -167,6 +170,7 @@ export default function ManualEntry({ rows, onAdd, onDelete }) {
     e.preventDefault();
     const row = {
       date: form.date,
+      orderTime: form.orderTime || '',
       dispatchDate: form.dispatchDate || '',
       business: form.business.trim() || '미지정',
       taxType: form.taxType,
@@ -223,9 +227,31 @@ export default function ManualEntry({ rows, onAdd, onDelete }) {
   const safePage = Math.min(page, pageCount - 1);
   const pageRows = filteredList.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
 
+  const allFilteredSelected = total > 0 && filteredList.every(({ idx }) => selected.has(idx));
+  const toggleOne = (idx) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx); else next.add(idx);
+      return next;
+    });
+  };
+  const toggleAllFiltered = () => {
+    setSelected((prev) => {
+      if (allFilteredSelected) return new Set();
+      const next = new Set(prev);
+      for (const { idx } of filteredList) next.add(idx);
+      return next;
+    });
+  };
+  const applyBulkDispatch = () => {
+    if (!selected.size || !bulkDispatch || !onBulkSetDispatch) return;
+    onBulkSetDispatch([...selected], bulkDispatch);
+    setSelected(new Set());
+  };
+
   const startEdit = (r, idx) => {
     setForm({
-      date: r.date, dispatchDate: r.dispatchDate || '', business: r.business, taxType: r.taxType || '',
+      date: r.date, orderTime: r.orderTime || '', dispatchDate: r.dispatchDate || '', business: r.business, taxType: r.taxType || '',
       supplier: r.supplier || '', platform: r.platform || '',
       product: r.product || '', spec: r.spec || '',
       quantity: String(r.quantity || 1),
@@ -311,6 +337,10 @@ export default function ManualEntry({ rows, onAdd, onDelete }) {
           <Field label="주문일자 (고객 주문)">
             <input type="date" className="input" required value={form.date}
               onChange={(e) => update({ date: e.target.value })} />
+          </Field>
+          <Field label="주문시간">
+            <input type="time" className="input" value={form.orderTime}
+              onChange={(e) => update({ orderTime: e.target.value })} />
           </Field>
           <Field label="발주일자 (보고 기준)">
             <input type="date" className="input" value={form.dispatchDate}
@@ -539,6 +569,17 @@ export default function ManualEntry({ rows, onAdd, onDelete }) {
           </div>
         </div>
 
+        {selected.size > 0 && (
+          <div className="filter-group" style={{ marginBottom: 8, padding: 8, background: 'var(--primary-soft)', borderRadius: 6, alignItems: 'center', gap: 8 }}>
+            <strong style={{ fontSize: 13, color: 'var(--primary)' }}>선택 {selected.size}건</strong>
+            <span className="muted text-xs">발주일자 일괄 변경:</span>
+            <input type="date" className="input" value={bulkDispatch}
+              onChange={(e) => setBulkDispatch(e.target.value)} style={{ width: 160 }} />
+            <button className="btn primary sm" onClick={applyBulkDispatch}>선택 건 발주일자 적용</button>
+            <button className="btn sm" onClick={() => setSelected(new Set())}>선택 해제</button>
+          </div>
+        )}
+
         {total === 0 ? (
           <p className="muted" style={{ fontSize: 13 }}>표시할 주문이 없습니다.</p>
         ) : (
@@ -547,7 +588,12 @@ export default function ManualEntry({ rows, onAdd, onDelete }) {
               <table className="table" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
                 <thead>
                   <tr>
+                    <th style={{ width: 28 }}>
+                      <input type="checkbox" checked={allFilteredSelected} onChange={toggleAllFiltered}
+                        title="필터된 전체 선택/해제" />
+                    </th>
                     <th>주문일자</th>
+                    <th>주문시간</th>
                     <th>발주일자</th>
                     <th>사업자</th>
                     <th>과세</th>
@@ -571,8 +617,12 @@ export default function ManualEntry({ rows, onAdd, onDelete }) {
                     const costTotal = (r.cost || 0) * qty;
                     const margin = r.revenue - costTotal - (r.shipping || 0) - (r.fee || 0) - (r.vat || 0);
                     return (
-                      <tr key={idx} style={{ background: editingIdx === idx ? 'var(--primary-soft)' : undefined }}>
+                      <tr key={idx} style={{ background: editingIdx === idx ? 'var(--primary-soft)' : (selected.has(idx) ? 'var(--bg-page)' : undefined) }}>
+                        <td>
+                          <input type="checkbox" checked={selected.has(idx)} onChange={() => toggleOne(idx)} />
+                        </td>
                         <td>{r.date}</td>
+                        <td className="muted">{r.orderTime || '—'}</td>
                         <td>{r.dispatchDate || '—'}</td>
                         <td>{r.business}</td>
                         <td className="muted">{r.taxType || ''}</td>
@@ -591,7 +641,7 @@ export default function ManualEntry({ rows, onAdd, onDelete }) {
                         <td className={`num ${margin >= 0 ? 'pos' : 'neg'}`}>{fmtKRW(margin)}</td>
                         <td style={{ whiteSpace: 'nowrap' }}>
                           <button className="btn sm" onClick={() => startEdit(r, idx)}>수정</button>{' '}
-                          <button className="btn sm danger" onClick={() => onDelete(idx)}>삭제</button>
+                          <button className="btn sm danger" onClick={() => { onDelete(idx); setSelected(new Set()); }}>삭제</button>
                         </td>
                       </tr>
                     );

@@ -246,6 +246,12 @@ export default function App() {
     setRows((prev) => prev.filter((_, i) => i !== idx));
   };
 
+  // 선택한 주문들의 발주일자 일괄 수정
+  const handleBulkSetDispatch = (indices, dispatchDate) => {
+    const set = new Set(indices);
+    setRows((prev) => prev.map((r, i) => (set.has(i) ? { ...r, dispatchDate } : r)));
+  };
+
   const handleClear = () => {
     if (!confirm('저장된 모든 데이터를 삭제하시겠습니까?')) return;
     setRows([]);
@@ -430,6 +436,7 @@ export default function App() {
                 rows={rows}
                 onAdd={handleManualAdd}
                 onDelete={handleManualDelete}
+                onBulkSetDispatch={handleBulkSetDispatch}
               />
             )}
 
