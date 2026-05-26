@@ -6,7 +6,9 @@ import {
   createGist,
   fetchGistData,
   findDashboardGist,
-  updateGist
+  updateGist,
+  listGistRevisions,
+  fetchGistRevision
 } from '../utils/cloudSync.js';
 
 export default function CloudSync({ rows, adCosts = [], bizInfo = [], csInfo = {}, onPull }) {
@@ -15,6 +17,7 @@ export default function CloudSync({ rows, adCosts = [], bizInfo = [], csInfo = {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState(null);
   const [showSetup, setShowSetup] = useState(!config);
+  const [revisions, setRevisions] = useState(null);
 
   const connect = async () => {
     if (!token.trim()) {
@@ -112,6 +115,39 @@ export default function CloudSync({ rows, adCosts = [], bizInfo = [], csInfo = {
     setStatus(null);
   };
 
+  const loadRevisions = async () => {
+    if (!config) return;
+    setBusy(true);
+    setStatus(null);
+    try {
+      const list = await listGistRevisions(config.token, config.gistId);
+      setRevisions(list.slice(0, 30));
+      if (!list.length) setStatus({ type: 'info', msg: '이전 버전 기록이 없습니다.' });
+    } catch (e) {
+      setStatus({ type: 'error', msg: e.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const restoreRevision = async (rev) => {
+    if (!config) return;
+    const when = rev.committedAt ? rev.committedAt.slice(0, 19).replace('T', ' ') : rev.version.slice(0, 8);
+    if (!confirm(`${when} 시점의 클라우드 버전으로 복구합니다.\n현재 데이터는 이 버전으로 덮어써집니다. 진행할까요?`)) return;
+    setBusy(true);
+    setStatus(null);
+    try {
+      const result = await fetchGistRevision(config.token, config.gistId, rev.version);
+      onPull(result.rows, result.adCosts || [], result.bizInfo || [], result.csInfo || {});
+      setStatus({ type: 'success', msg: `${when} 버전으로 복구 완료 (${result.rows.length}건)` });
+      setRevisions(null);
+    } catch (e) {
+      setStatus({ type: 'error', msg: e.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="card">
       <div className="card-header">
@@ -172,6 +208,58 @@ export default function CloudSync({ rows, adCosts = [], bizInfo = [], csInfo = {
             style={{ padding: '12px 16px', fontSize: 14 }}
           >
             연결 해제
+          </button>
+          <button
+            className="btn"
+            onClick={loadRevisions}
+            disabled={busy}
+            style={{ padding: '12px 16px', fontSize: 14 }}
+          >
+            🕘 이전 버전 복구
+          </button>
+        </div>
+      )}
+
+      {config && revisions && (
+        <div
+          style={{
+            marginBottom: 14,
+            padding: 12,
+            background: '#f8fafc',
+            border: '1px solid var(--border)',
+            borderRadius: 8
+          }}
+        >
+          <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>
+            이전 클라우드 버전 ({revisions.length}개) — 사고 직전 시각의 버전을 선택해 복구하세요
+          </div>
+          <div style={{ maxHeight: 260, overflowY: 'auto', display: 'grid', gap: 6 }}>
+            {revisions.map((rev, i) => (
+              <div
+                key={rev.version}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '6px 10px',
+                  background: 'white',
+                  border: '1px solid var(--border)',
+                  borderRadius: 6,
+                  fontSize: 13
+                }}
+              >
+                <span>
+                  {rev.committedAt ? rev.committedAt.slice(0, 19).replace('T', ' ') : rev.version.slice(0, 10)}
+                  {i === 0 && <span className="muted"> (현재/최신)</span>}
+                </span>
+                <button className="btn sm" onClick={() => restoreRevision(rev)} disabled={busy}>
+                  이 버전으로 복구
+                </button>
+              </div>
+            ))}
+          </div>
+          <button className="btn sm" style={{ marginTop: 8 }} onClick={() => setRevisions(null)}>
+            닫기
           </button>
         </div>
       )}

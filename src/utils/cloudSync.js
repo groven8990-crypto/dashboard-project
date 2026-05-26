@@ -125,6 +125,35 @@ export async function fetchGistData(token, gistId) {
   }
 }
 
+// gist 변경 이력(이전 버전) 목록
+export async function listGistRevisions(token, gistId) {
+  const data = await gistRequest('GET', `https://api.github.com/gists/${gistId}`, token);
+  return (data.history || []).map((h) => ({
+    version: h.version,
+    committedAt: h.committed_at
+  }));
+}
+
+// 특정 버전(version sha)의 데이터 가져오기
+export async function fetchGistRevision(token, gistId, sha) {
+  const data = await gistRequest('GET', `https://api.github.com/gists/${gistId}/${sha}`, token);
+  const file = data.files[GIST_FILENAME];
+  if (!file) throw new Error('이 버전에는 데이터 파일이 없습니다.');
+  let content = file.content;
+  if (file.truncated && file.raw_url) {
+    const res = await fetch(file.raw_url);
+    content = await res.text();
+  }
+  const parsed = JSON.parse(content);
+  return {
+    rows: parsed.rows || [],
+    adCosts: parsed.adCosts || [],
+    bizInfo: parsed.bizInfo || [],
+    csInfo: parsed.csInfo || {},
+    updatedAt: parsed.updatedAt || null
+  };
+}
+
 // 사용자의 모든 gist 중 dashboard용 gist를 찾음
 export async function findDashboardGist(token) {
   const data = await gistRequest('GET', 'https://api.github.com/gists?per_page=100', token);
