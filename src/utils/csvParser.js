@@ -292,13 +292,6 @@ function findRawHeaderRow(json) {
 function parseRawOrderSheet(json, headerIdx) {
   const headerRow = (json[headerIdx] || []).map(normalizeHeader);
   const idx = (name) => headerRow.indexOf(normalizeHeader(name));
-  const idxContains = (sub) => headerRow.findIndex((h) => h.includes(normalizeHeader(sub)));
-  // 매입(3PL) 배송비 열: "3PL배송비"처럼 표기되므로 '3pl' 포함 열을 우선 인식,
-  // 없으면 일반 '배송비' 열로 폴백
-  const shippingCol = (() => {
-    const tpl = idxContains('3pl');
-    return tpl >= 0 ? tpl : idx('배송비');
-  })();
   const c = {
     date: idx('주문일시'),
     alias: idx('별칭(쇼핑몰계정)'),
@@ -311,7 +304,7 @@ function parseRawOrderSheet(json, headerIdx) {
     total: idx('총주문금액'),
     discount: idx('할인금액'),
     fee: idx('마켓수수료금액'),
-    shipping: shippingCol,
+    shipping: idx('배송비'),
     orderNo: idx('주문번호')
   };
 
@@ -348,13 +341,12 @@ function parseRawOrderSheet(json, headerIdx) {
       shortenProductName(pName, store);
 
     const qty = c.qty >= 0 ? parseNumber(r[c.qty]) || 1 : 1;
-    // AH열 = 매입 배송비 (거래처 정산용). 고객 주문금액에는 이미 배송비가 포함돼 있음.
-    const purchaseShipping = c.shipping >= 0 ? parseNumber(r[c.shipping]) : 0;
-    // 주문금액 = 총주문금액(AB) − 할인금액(AI) + 매입배송비(AH)
+    // 고객 주문금액에는 배송비(AH)가 이미 포함돼 있음.
+    // 주문금액 = 총주문금액(AB) − 할인금액(AI) + 배송비(AH)
     const revenue =
       (c.total >= 0 ? parseNumber(r[c.total]) : 0) -
       (c.discount >= 0 ? parseNumber(r[c.discount]) : 0) +
-      purchaseShipping;
+      (c.shipping >= 0 ? parseNumber(r[c.shipping]) : 0);
 
     rows.push({
       date: toISODate(orderDate),
@@ -369,7 +361,6 @@ function parseRawOrderSheet(json, headerIdx) {
       revenue,
       cost: 0,
       shipping: 0,
-      purchaseShipping,
       fee: c.fee >= 0 ? parseNumber(r[c.fee]) : 0,
       vat: 0,
       labor: 0,
@@ -513,7 +504,6 @@ export function exportCSV(rows) {
       주문금액: r.revenue,
       매입가: r.cost,
       배송비: r.shipping,
-      매입배송비: r.purchaseShipping || 0,
       판매수수료: r.fee,
       부가세: r.vat,
       인건비: r.labor,

@@ -22,13 +22,13 @@ export default function SupplierLedger({ rows, range, onRangeChange }) {
     for (const r of rows) {
       const s = r.supplier || '(미지정)';
       if (!map.has(s)) {
-        map.set(s, { supplier: s, orders: 0, revenue: 0, cost: 0, purchaseShipping: 0, fee: 0 });
+        map.set(s, { supplier: s, orders: 0, revenue: 0, cost: 0, shipping: 0, fee: 0 });
       }
       const g = map.get(s);
       g.orders++;
       g.revenue += r.revenue || 0;
       g.cost += r.cost || 0;
-      g.purchaseShipping += r.purchaseShipping || 0;
+      g.shipping += r.shipping || 0;
       g.fee += r.fee || 0;
     }
     return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue);
@@ -57,10 +57,10 @@ export default function SupplierLedger({ rows, range, onRangeChange }) {
         orders: s.orders + 1,
         revenue: s.revenue + (r.revenue || 0),
         cost: s.cost + (r.cost || 0),
-        purchaseShipping: s.purchaseShipping + (r.purchaseShipping || 0),
+        shipping: s.shipping + (r.shipping || 0),
         fee: s.fee + (r.fee || 0)
       }),
-      { orders: 0, revenue: 0, cost: 0, purchaseShipping: 0, fee: 0 }
+      { orders: 0, revenue: 0, cost: 0, shipping: 0, fee: 0 }
     );
   }, [detailRows]);
 
@@ -97,7 +97,7 @@ export default function SupplierLedger({ rows, range, onRangeChange }) {
             </thead>
             <tbody>
               {summaryBySupplier.map((s) => {
-                const margin = s.revenue - s.cost - s.purchaseShipping - s.fee;
+                const margin = s.revenue - s.cost - s.shipping - s.fee;
                 return (
                   <tr
                     key={s.supplier}
@@ -117,8 +117,8 @@ export default function SupplierLedger({ rows, range, onRangeChange }) {
                     <td className="num">{fmtNum(s.orders)}</td>
                     <td className="num">{fmt(s.revenue)}</td>
                     <td className="num">{fmt(s.cost)}</td>
-                    <td className="num" style={{ color: s.purchaseShipping > 0 ? 'var(--warning)' : undefined }}>
-                      {fmt(s.purchaseShipping)}
+                    <td className="num" style={{ color: s.shipping > 0 ? 'var(--warning)' : undefined }}>
+                      {fmt(s.shipping)}
                     </td>
                     <td className="num">{fmt(s.fee)}</td>
                     <td className={`num ${margin >= 0 ? 'pos' : 'neg'}`}>{fmt(margin)}</td>
@@ -181,7 +181,7 @@ export default function SupplierLedger({ rows, range, onRangeChange }) {
                 <th style={{ cursor: 'pointer', textAlign: 'right' }} onClick={() => toggleSort('quantity')}>수량{sortIcon('quantity')}</th>
                 <th style={{ cursor: 'pointer', textAlign: 'right' }} onClick={() => toggleSort('revenue')}>주문금액{sortIcon('revenue')}</th>
                 <th style={{ cursor: 'pointer', textAlign: 'right' }} onClick={() => toggleSort('cost')}>매입가{sortIcon('cost')}</th>
-                <th style={{ cursor: 'pointer', textAlign: 'right' }} onClick={() => toggleSort('purchaseShipping')}>매입 배송비{sortIcon('purchaseShipping')}</th>
+                <th style={{ cursor: 'pointer', textAlign: 'right' }} onClick={() => toggleSort('shipping')}>매입 배송비{sortIcon('shipping')}</th>
                 <th style={{ textAlign: 'right' }}>수수료</th>
                 <th>주문번호</th>
                 <th>판매처</th>
@@ -200,8 +200,8 @@ export default function SupplierLedger({ rows, range, onRangeChange }) {
                   <td className="num" style={{ color: r.cost > 0 ? undefined : 'var(--muted)' }}>
                     {r.cost > 0 ? fmt(r.cost) : '—'}
                   </td>
-                  <td className="num" style={{ color: (r.purchaseShipping || 0) > 0 ? 'var(--warning)' : 'var(--muted)' }}>
-                    {(r.purchaseShipping || 0) > 0 ? fmt(r.purchaseShipping) : '—'}
+                  <td className="num" style={{ color: (r.shipping || 0) > 0 ? 'var(--warning)' : 'var(--muted)' }}>
+                    {(r.shipping || 0) > 0 ? fmt(r.shipping) : '—'}
                   </td>
                   <td className="num">{r.fee > 0 ? fmt(r.fee) : '—'}</td>
                   <td style={{ fontSize: 11, color: 'var(--muted)', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -218,8 +218,8 @@ export default function SupplierLedger({ rows, range, onRangeChange }) {
                 <td className="num"><strong>{fmt(detailRows.reduce((s, r) => s + (r.quantity || 1), 0))}</strong></td>
                 <td className="num"><strong>{fmt(detailTotals.revenue)}</strong></td>
                 <td className="num"><strong>{fmt(detailTotals.cost)}</strong></td>
-                <td className="num" style={{ color: detailTotals.purchaseShipping > 0 ? 'var(--warning)' : undefined }}>
-                  <strong>{fmt(detailTotals.purchaseShipping)}</strong>
+                <td className="num" style={{ color: detailTotals.shipping > 0 ? 'var(--warning)' : undefined }}>
+                  <strong>{fmt(detailTotals.shipping)}</strong>
                 </td>
                 <td className="num"><strong>{fmt(detailTotals.fee)}</strong></td>
                 <td colSpan={3} />
