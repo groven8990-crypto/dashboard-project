@@ -9,7 +9,7 @@ import {
   updateGist
 } from '../utils/cloudSync.js';
 
-export default function CloudSync({ rows, onPull }) {
+export default function CloudSync({ rows, adCosts = [], onPull }) {
   const [config, setConfig] = useState(getCloudConfig());
   const [token, setToken] = useState('');
   const [busy, setBusy] = useState(false);
@@ -40,7 +40,7 @@ export default function CloudSync({ rows, onPull }) {
           msg: `기존 dashboard gist 발견. ${user.login} 계정에 연결됨. "지금 다운로드"로 데이터를 가져오세요.`
         });
       } else {
-        const created = await createGist(token, rows);
+        const created = await createGist(token, { rows, adCosts });
         cfg = {
           token,
           gistId: created.gistId,
@@ -69,7 +69,7 @@ export default function CloudSync({ rows, onPull }) {
     setBusy(true);
     setStatus(null);
     try {
-      const result = await updateGist(config.token, config.gistId, rows);
+      const result = await updateGist(config.token, config.gistId, { rows, adCosts });
       setStatus({
         type: 'success',
         msg: `클라우드 업로드 완료 (${result.updatedAt.slice(0, 19).replace('T', ' ')}, ${rows.length}건)`
@@ -90,7 +90,7 @@ export default function CloudSync({ rows, onPull }) {
     setStatus(null);
     try {
       const result = await fetchGistData(config.token, config.gistId);
-      onPull(result.rows);
+      onPull(result.rows, result.adCosts || []);
       setStatus({
         type: 'success',
         msg: `클라우드 다운로드 완료 (${result.rows.length}건, ${result.updatedAt.slice(0, 19).replace('T', ' ')})`

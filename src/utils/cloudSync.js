@@ -52,18 +52,30 @@ export async function validateToken(token) {
   return { login: user.login, name: user.name };
 }
 
+function normalizePayload(payload) {
+  // 하위호환: rows 배열만 넘어오면 { rows } 로 감싼다
+  if (Array.isArray(payload)) return { rows: payload, adCosts: [] };
+  return { rows: payload?.rows || [], adCosts: payload?.adCosts || [] };
+}
+
+function serializeContent(payload) {
+  const { rows, adCosts } = normalizePayload(payload);
+  return JSON.stringify({
+    version: 2,
+    updatedAt: new Date().toISOString(),
+    rows,
+    adCosts
+  });
+}
+
 // 새 gist 생성
-export async function createGist(token, rows) {
+export async function createGist(token, payload) {
   const data = await gistRequest('POST', 'https://api.github.com/gists', token, {
     description: GIST_DESCRIPTION,
     public: false,
     files: {
       [GIST_FILENAME]: {
-        content: JSON.stringify({
-          version: 1,
-          updatedAt: new Date().toISOString(),
-          rows
-        })
+        content: serializeContent(payload)
       }
     }
   });
@@ -71,15 +83,11 @@ export async function createGist(token, rows) {
 }
 
 // 기존 gist 업데이트
-export async function updateGist(token, gistId, rows) {
+export async function updateGist(token, gistId, payload) {
   await gistRequest('PATCH', `https://api.github.com/gists/${gistId}`, token, {
     files: {
       [GIST_FILENAME]: {
-        content: JSON.stringify({
-          version: 1,
-          updatedAt: new Date().toISOString(),
-          rows
-        })
+        content: serializeContent(payload)
       }
     }
   });
@@ -100,6 +108,7 @@ export async function fetchGistData(token, gistId) {
     const parsed = JSON.parse(content);
     return {
       rows: parsed.rows || [],
+      adCosts: parsed.adCosts || [],
       updatedAt: parsed.updatedAt || data.updated_at
     };
   } catch (e) {
@@ -119,7 +128,7 @@ export async function findDashboardGist(token) {
 }
 
 // 자동 동기화 매니저 (debounce + 충돌 방지)
-export function createSyncManager({ getConfig, getRows, onStatus }) {
+export function createSyncManager({ getConfig, getData, getRows, onStatus }) {
   let timer = null;
   let inFlight = false;
   let pending = false;
@@ -134,8 +143,8 @@ export function createSyncManager({ getConfig, getRows, onStatus }) {
     inFlight = true;
     onStatus?.({ state: 'syncing' });
     try {
-      const rows = getRows();
-      const result = await updateGist(cfg.token, cfg.gistId, rows);
+      const payload = getData ? getData() : { rows: getRows ? getRows() : [], adCosts: [] };
+      const result = await updateGist(cfg.token, cfg.gistId, payload);
       onStatus?.({ state: 'synced', updatedAt: result.updatedAt });
     } catch (e) {
       onStatus?.({ state: 'error', error: e.message });

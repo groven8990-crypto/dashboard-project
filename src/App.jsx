@@ -13,7 +13,9 @@ import FormatGuide from './components/FormatGuide.jsx';
 import ProductAnalysis from './components/ProductAnalysis.jsx';
 import SupplierAnalysis from './components/SupplierAnalysis.jsx';
 import CloudSync from './components/CloudSync.jsx';
+import AdCostManager from './components/AdCostManager.jsx';
 import { createSyncManager, getCloudConfig } from './utils/cloudSync.js';
+import { loadAdCosts, saveAdCosts, applyAdCosts } from './utils/adCosts.js';
 import {
   aggregate,
   filterRows,
@@ -47,6 +49,7 @@ function loadPrefs() {
 
 export default function App() {
   const [rows, setRows] = useState(loadStored);
+  const [adCosts, setAdCosts] = useState(loadAdCosts);
   const [tab, setTab] = useState('overview');
   const [reportView, setReportView] = useState('daily');
   const [granularity, setGranularity] = useState('day');
@@ -56,25 +59,27 @@ export default function App() {
   const [syncStatus, setSyncStatus] = useState(null);
   const syncManagerRef = React.useRef(null);
   const rowsRef = React.useRef(rows);
+  const adCostsRef = React.useRef(adCosts);
   React.useEffect(() => { rowsRef.current = rows; }, [rows]);
+  React.useEffect(() => { adCostsRef.current = adCosts; }, [adCosts]);
 
   // 클라우드 동기화 매니저 초기화
   React.useEffect(() => {
     syncManagerRef.current = createSyncManager({
       getConfig: getCloudConfig,
-      getRows: () => rowsRef.current,
+      getData: () => ({ rows: rowsRef.current, adCosts: adCostsRef.current }),
       onStatus: setSyncStatus
     });
   }, []);
 
-  // rows 변경 시 자동 업로드 (debounced 2초)
+  // rows/광고비 변경 시 자동 업로드 (debounced 2초)
   React.useEffect(() => {
     if (!initialized) return;
     const cfg = getCloudConfig();
     if (cfg && cfg.gistId) {
       syncManagerRef.current?.scheduleSync();
     }
-  }, [rows, initialized]);
+  }, [rows, adCosts, initialized]);
 
   // Persist rows
   useEffect(() => {
@@ -84,6 +89,14 @@ export default function App() {
       console.warn('Storage full or unavailable', e);
     }
   }, [rows]);
+
+  // Persist 광고비
+  useEffect(() => {
+    saveAdCosts(adCosts);
+  }, [adCosts]);
+
+  // 월별 광고비를 일할계산하여 반영한 분석용 행
+  const effectiveRows = useMemo(() => applyAdCosts(rows, adCosts), [rows, adCosts]);
 
   const dataRange = useMemo(() => getDateRange(rows), [rows]);
   const businesses = useMemo(() => getUniqueValues(rows, 'business'), [rows]);
@@ -111,12 +124,12 @@ export default function App() {
 
   const filtered = useMemo(
     () =>
-      filterRows(rows, {
+      filterRows(effectiveRows, {
         from: range.from,
         to: range.to,
         businesses: selectedBusinesses
       }),
-    [rows, range, selectedBusinesses]
+    [effectiveRows, range, selectedBusinesses]
   );
 
   const currentAgg = useMemo(() => aggregate(filtered), [filtered]);
@@ -125,12 +138,12 @@ export default function App() {
     if (!range.from || !range.to) return null;
     const prev = previousPeriodRange(range.from, range.to);
     if (!prev) return null;
-    const prevRows = filterRows(rows, {
+    const prevRows = filterRows(effectiveRows, {
       ...prev,
       businesses: selectedBusinesses
     });
     return aggregate(prevRows);
-  }, [rows, range, selectedBusinesses]);
+  }, [effectiveRows, range, selectedBusinesses]);
 
   const periodSeries = useMemo(
     () => groupByPeriod(filtered, granularity),
@@ -234,7 +247,7 @@ export default function App() {
         {hasData && tab === 'overview' && (
           <>
             <KPICards current={currentAgg} previous={previousAgg} />
-            <DayOverDay rows={rows} dataRange={dataRange} />
+            <DayOverDay rows={effectiveRows} dataRange={dataRange} />
             <TrendChart data={periodSeries} granularity={granularity} />
             <MarginAnalysis agg={currentAgg} />
           </>
@@ -288,9 +301,9 @@ export default function App() {
               </div>
             </div>
             {reportView === 'daily' ? (
-              <DailyReport rows={rows} dataRange={dataRange} />
+              <DailyReport rows={effectiveRows} dataRange={dataRange} />
             ) : (
-              <MonthlyReport rows={rows} dataRange={dataRange} />
+              <MonthlyReport rows={effectiveRows} dataRange={dataRange} />
             )}
           </>
         )}
@@ -304,8 +317,10 @@ export default function App() {
             />
             <CloudSync
               rows={rows}
-              onPull={(newRows) => {
+              adCosts={adCosts}
+              onPull={(newRows, newAdCosts) => {
                 setRows(newRows);
+                if (Array.isArray(newAdCosts)) setAdCosts(newAdCosts);
                 if (newRows.length) {
                   const r = getDateRange(newRows);
                   setRange({ from: r.min, to: r.max });
@@ -313,6 +328,7 @@ export default function App() {
                 }
               }}
             />
+            <AdCostManager rows={rows} adCosts={adCosts} onChange={setAdCosts} />
             <FormatGuide />
             <ManualEntry
               rows={rows}
