@@ -26,8 +26,15 @@ const EMPTY = {
   shipping: '',
   fee: '',
   vat: '',
+  purchaseExempt: null, // null=자동(매입처로 추정), true/false=수동 지정
   note: ''
 };
+
+// 농수산물 등 면세 매입처 추정 (매입부가세 0). 기본값일 뿐 체크박스로 수정 가능.
+const SUPPLIER_VAT_EXEMPT = /농협|수협|영어조합|작목반|수산|농산|축협|축산|농원/;
+function guessPurchaseExempt(supplier) {
+  return SUPPLIER_VAT_EXEMPT.test(String(supplier || ''));
+}
 
 export default function ManualEntry({ rows, onAdd, onDelete }) {
   const [form, setForm] = useState(EMPTY);
@@ -121,8 +128,13 @@ export default function ManualEntry({ rows, onAdd, onDelete }) {
   };
 
   // 부가세 = 매출부가세(주문금액÷11) − 매입부가세(매입가÷11)
-  const salesVat = Math.round((Number(form.revenue) || 0) / 11);
-  const purchaseVat = Math.round((Number(form.cost) || 0) / 11);
+  // 매출 면세(면세 사업자) → 매출부가세 0, 매입 면세(농수산물 등) → 매입부가세 0
+  const isSaleExempt = form.taxType === '면세';
+  const purchaseExempt =
+    form.purchaseExempt == null ? guessPurchaseExempt(form.supplier) : form.purchaseExempt;
+  const salesVat = isSaleExempt ? 0 : Math.round((Number(form.revenue) || 0) / 11);
+  const purchaseVat =
+    isSaleExempt || purchaseExempt ? 0 : Math.round((Number(form.cost) || 0) / 11);
   const vatSuggest = salesVat - purchaseVat;
 
   // 부가세 자동 (과세사업자: 매출부가세 − 매입부가세)
@@ -135,6 +147,14 @@ export default function ManualEntry({ rows, onAdd, onDelete }) {
     const patch = { business: v };
     if (v === '그로븐' || v === '디네트') patch.taxType = '면세';
     else if (v === '옐로우브릿지') patch.taxType = '과세';
+    if (patch.taxType === '면세') patch.vat = '0';
+    update(patch);
+  };
+
+  // 과세/면세 변경 시: 면세면 부가세 0 자동
+  const onTaxTypeChange = (v) => {
+    const patch = { taxType: v };
+    if (v === '면세') patch.vat = '0';
     update(patch);
   };
 
@@ -251,7 +271,7 @@ export default function ManualEntry({ rows, onAdd, onDelete }) {
             </datalist>
           </Field>
           <Field label="과세">
-            <select className="select" value={form.taxType} onChange={(e) => update({ taxType: e.target.value })}>
+            <select className="select" value={form.taxType} onChange={(e) => onTaxTypeChange(e.target.value)}>
               <option value="">-</option>
               <option value="면세">면세</option>
               <option value="과세">과세</option>
@@ -365,10 +385,10 @@ export default function ManualEntry({ rows, onAdd, onDelete }) {
               </>
             }
             hint={
-              form.taxType === '면세' ? (
+              isSaleExempt ? (
                 <span className="muted text-xs">면세 사업자 → 부가세 0원</span>
               ) : (
-                <div className="text-xs" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
+                <div className="text-xs" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
                   {(form.revenue || form.cost) ? (
                     <button
                       type="button"
@@ -382,11 +402,16 @@ export default function ManualEntry({ rows, onAdd, onDelete }) {
                       💡 추천: {fmtKRW(vatSuggest)}
                     </button>
                   ) : null}
+                  <label className="muted" style={{ display: 'inline-flex', alignItems: 'center', gap: 3, cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={purchaseExempt}
+                      onChange={(e) => update({ purchaseExempt: e.target.checked })}
+                    />
+                    매입 면세(농수산물)
+                  </label>
                   <span className="muted">
-                    매출부가세(주문금액÷11) − 매입부가세(매입가÷11)
-                    {(form.revenue || form.cost)
-                      ? ` = ${fmtKRW(salesVat)} − ${fmtKRW(purchaseVat)}`
-                      : ''}
+                    매출부가세 {fmtKRW(salesVat)} − 매입부가세 {fmtKRW(purchaseVat)}
                   </span>
                 </div>
               )
