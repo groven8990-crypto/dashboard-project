@@ -50,8 +50,11 @@ const SUPPLIER_CANONICAL = {
 };
 
 export function normalizeSupplier(name) {
-  const raw = String(name || '').trim();
+  let raw = String(name || '').trim();
   if (!raw) return '';
+  // 거래처명 칸에 상품코드가 섞여 들어온 경우 앞부분만 사용
+  // 예) "최고집_듀록버터삼겹살/500g-2" → "최고집"
+  raw = raw.split(/[/_]/)[0].trim();
   const key = raw.replace(/\(주\)|㈜|주식회사|\(유\)|유한회사/g, '').replace(/\s+/g, '');
   return SUPPLIER_CANONICAL[key] || raw;
 }
