@@ -43,7 +43,7 @@ export default function ManualEntry({ rows, onAdd, onDelete }) {
   const [form, setForm] = useState(EMPTY);
   const [editingIdx, setEditingIdx] = useState(null);
   const [suggestions, setSuggestions] = useState({});
-  const [listFilter, setListFilter] = useState({ from: '', to: '', q: '', business: '' });
+  const [listFilter, setListFilter] = useState({ from: '', to: '', q: '', business: '', supplier: '', platform: '' });
   const [page, setPage] = useState(0);
 
   const businesses = useMemo(() => getUniqueValues(rows, 'business'), [rows]);
@@ -205,6 +205,8 @@ export default function ManualEntry({ rows, onAdd, onDelete }) {
       if (listFilter.from && (r.date || '') < listFilter.from) continue;
       if (listFilter.to && (r.date || '') > listFilter.to) continue;
       if (listFilter.business && r.business !== listFilter.business) continue;
+      if (listFilter.supplier && r.supplier !== listFilter.supplier) continue;
+      if (listFilter.platform && r.platform !== listFilter.platform) continue;
       if (q) {
         const hay = [r.product, r.spec, r.supplier, r.platform, r.recipient, r.phone, r.orderNo, r.note]
           .filter(Boolean).join(' ').toLowerCase();
@@ -306,11 +308,11 @@ export default function ManualEntry({ rows, onAdd, onDelete }) {
       <form onSubmit={handleSubmit}>
         {/* 행 1: 기본 정보 */}
         <div className="form-grid">
-          <Field label="주문일 (고객 주문)">
+          <Field label="주문일자 (고객 주문)">
             <input type="date" className="input" required value={form.date}
               onChange={(e) => update({ date: e.target.value })} />
           </Field>
-          <Field label="발주일 (보고 기준)">
+          <Field label="발주일자 (보고 기준)">
             <input type="date" className="input" value={form.dispatchDate}
               onChange={(e) => update({ dispatchDate: e.target.value })} />
           </Field>
@@ -516,11 +518,21 @@ export default function ManualEntry({ rows, onAdd, onDelete }) {
               <option value="">전체 사업자</option>
               {businesses.map((b) => <option key={b} value={b}>{b}</option>)}
             </select>
-            <input className="input" placeholder="제품/매입처/수취인/주문번호 검색"
+            <select className="select" value={listFilter.supplier}
+              onChange={(e) => updateFilter({ supplier: e.target.value })}>
+              <option value="">전체 매입처</option>
+              {suppliers.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <select className="select" value={listFilter.platform}
+              onChange={(e) => updateFilter({ platform: e.target.value })}>
+              <option value="">전체 판매처</option>
+              {platforms.map((p) => <option key={p} value={p}>{p}</option>)}
+            </select>
+            <input className="input" placeholder="제품/수취인/주문번호 검색"
               value={listFilter.q} onChange={(e) => updateFilter({ q: e.target.value })}
-              style={{ minWidth: 200 }} />
-            {(listFilter.from || listFilter.to || listFilter.q || listFilter.business) && (
-              <button className="btn" onClick={() => updateFilter({ from: '', to: '', q: '', business: '' })}>
+              style={{ minWidth: 180 }} />
+            {(listFilter.from || listFilter.to || listFilter.q || listFilter.business || listFilter.supplier || listFilter.platform) && (
+              <button className="btn" onClick={() => updateFilter({ from: '', to: '', q: '', business: '', supplier: '', platform: '' })}>
                 필터 해제
               </button>
             )}
@@ -535,8 +547,8 @@ export default function ManualEntry({ rows, onAdd, onDelete }) {
               <table className="table" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
                 <thead>
                   <tr>
-                    <th>주문일</th>
-                    <th>발주일</th>
+                    <th>주문일자</th>
+                    <th>발주일자</th>
                     <th>사업자</th>
                     <th>과세</th>
                     <th>매입처</th>
@@ -545,7 +557,9 @@ export default function ManualEntry({ rows, onAdd, onDelete }) {
                     <th>규격</th>
                     <th style={{ textAlign: 'right' }}>수량</th>
                     <th style={{ textAlign: 'right' }}>매출</th>
-                    <th style={{ textAlign: 'right' }}>매입</th>
+                    <th style={{ textAlign: 'right' }}>매입가</th>
+                    <th style={{ textAlign: 'right' }}>매입계</th>
+                    <th style={{ textAlign: 'right' }}>매입배송비</th>
                     <th style={{ textAlign: 'right' }}>부가세</th>
                     <th style={{ textAlign: 'right' }}>마진</th>
                     <th></th>
@@ -553,7 +567,9 @@ export default function ManualEntry({ rows, onAdd, onDelete }) {
                 </thead>
                 <tbody>
                   {pageRows.map(({ r, idx }) => {
-                    const margin = r.revenue - r.cost - (r.shipping || 0) - (r.fee || 0) - (r.vat || 0);
+                    const qty = r.quantity || 1;
+                    const costTotal = (r.cost || 0) * qty;
+                    const margin = r.revenue - costTotal - (r.shipping || 0) - (r.fee || 0) - (r.vat || 0);
                     return (
                       <tr key={idx} style={{ background: editingIdx === idx ? 'var(--primary-soft)' : undefined }}>
                         <td>{r.date}</td>
@@ -564,9 +580,13 @@ export default function ManualEntry({ rows, onAdd, onDelete }) {
                         <td>{r.platform || ''}</td>
                         <td>{r.product || ''}</td>
                         <td className="muted">{r.spec || ''}</td>
-                        <td className="num">{r.quantity || 1}</td>
+                        <td className="num">{qty}</td>
                         <td className="num">{fmtKRW(r.revenue)}</td>
                         <td className="num">{fmtKRW(r.cost)}</td>
+                        <td className="num">{fmtKRW(costTotal)}</td>
+                        <td className="num" style={{ color: (r.shipping || 0) > 0 ? 'var(--warning)' : 'var(--muted)' }}>
+                          {(r.shipping || 0) > 0 ? fmtKRW(r.shipping) : '—'}
+                        </td>
                         <td className="num">{fmtKRW(r.vat || 0)}</td>
                         <td className={`num ${margin >= 0 ? 'pos' : 'neg'}`}>{fmtKRW(margin)}</td>
                         <td style={{ whiteSpace: 'nowrap' }}>
@@ -637,7 +657,8 @@ function SuggestChip({ value, samples, onClick }) {
 
 function MarginPreview({ form }) {
   const rev = Number(form.revenue) || 0;
-  const cost = Number(form.cost) || 0;
+  const qty = Number(form.quantity) || 1;
+  const cost = (Number(form.cost) || 0) * qty;
   const ship = Number(form.shipping) || 0;
   const fee = Number(form.fee) || 0;
   const vat = Number(form.vat) || 0;

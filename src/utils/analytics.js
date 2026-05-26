@@ -1,9 +1,14 @@
 import { getPeriodKey, parseDate, toISODate } from './dateUtils.js';
 
-// 마진액 = 매출 − 매입 − 배송비 − 인건비 − 광고비 − 판매수수료 − 부가세
+// 매입가는 단가, 매입 합계 = 매입가 × 수량
+export function lineCost(row) {
+  return (row.cost || 0) * (row.quantity || 1);
+}
+
+// 마진액 = 매출 − 매입(단가×수량) − 배송비 − 인건비 − 광고비 − 판매수수료 − 부가세
 export function computeMargin(row) {
   const expenses =
-    (row.cost || 0) +
+    lineCost(row) +
     (row.shipping || 0) +
     (row.labor || 0) +
     (row.ad || 0) +
@@ -29,7 +34,7 @@ export function aggregate(rows) {
   };
   for (const r of rows) {
     agg.revenue += r.revenue || 0;
-    agg.cost += r.cost || 0;
+    agg.cost += lineCost(r);
     agg.shipping += r.shipping || 0;
     agg.labor += r.labor || 0;
     agg.ad += r.ad || 0;
