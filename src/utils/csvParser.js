@@ -292,6 +292,13 @@ function findRawHeaderRow(json) {
 function parseRawOrderSheet(json, headerIdx) {
   const headerRow = (json[headerIdx] || []).map(normalizeHeader);
   const idx = (name) => headerRow.indexOf(normalizeHeader(name));
+  const idxContains = (sub) => headerRow.findIndex((h) => h.includes(normalizeHeader(sub)));
+  // 매입(3PL) 배송비 열: "3PL배송비"처럼 표기되므로 '3pl' 포함 열을 우선 인식,
+  // 없으면 일반 '배송비' 열로 폴백
+  const shippingCol = (() => {
+    const tpl = idxContains('3pl');
+    return tpl >= 0 ? tpl : idx('배송비');
+  })();
   const c = {
     date: idx('주문일시'),
     alias: idx('별칭(쇼핑몰계정)'),
@@ -304,7 +311,7 @@ function parseRawOrderSheet(json, headerIdx) {
     total: idx('총주문금액'),
     discount: idx('할인금액'),
     fee: idx('마켓수수료금액'),
-    shipping: idx('배송비'),
+    shipping: shippingCol,
     orderNo: idx('주문번호')
   };
 
