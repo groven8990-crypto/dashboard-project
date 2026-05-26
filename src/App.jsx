@@ -153,13 +153,22 @@ export default function App() {
   const handleLoad = (newRows, opts = {}) => {
     if (opts.append) {
       setRows((prev) => [...prev, ...newRows]);
+      if (newRows.length) {
+        const r = getDateRange(newRows);
+        // 추가된 주문의 날짜를 포함하도록 기간 필터 확장
+        setRange((prev) => ({
+          from: prev.from && prev.from < r.min ? prev.from : r.min,
+          to: prev.to && prev.to > r.max ? prev.to : r.max
+        }));
+        setInitialized(true);
+      }
     } else {
       setRows(newRows);
-    }
-    if (newRows.length && !initialized) {
-      const r = getDateRange(newRows);
-      setRange({ from: r.min, to: r.max });
-      setInitialized(true);
+      if (newRows.length && !initialized) {
+        const r = getDateRange(newRows);
+        setRange({ from: r.min, to: r.max });
+        setInitialized(true);
+      }
     }
   };
 

@@ -32,6 +32,38 @@ function normalizePlatform(p) {
   return PLATFORM_NORMALIZE[trimmed] || trimmed;
 }
 
+// 오픈마켓 통합 주문내역(원본) 양식에서 쓰는 셀러 계정(상호) → 사업자 매핑
+const STORE_TO_BUSINESS = {
+  '로또상회': '그로븐',
+  '자꾸가게': '옐로우브릿지'
+};
+
+// "지마켓-로또상회" → { platform: '지마켓', store: '로또상회' }
+function parseAccountAlias(alias) {
+  const s = String(alias || '').trim();
+  const idx = s.indexOf('-');
+  if (idx === -1) return { platform: normalizePlatform(s), store: '' };
+  return {
+    platform: normalizePlatform(s.slice(0, idx).trim()),
+    store: s.slice(idx + 1).trim()
+  };
+}
+
+// "일비]박대/100g-10" → { supplier: '일비', product: '박대' }
+// "도매꾹]63503778" → { supplier: '도매꾹', product: '' } (숫자코드는 제품명으로 안씀)
+// "m202604077a8908c4d" → { supplier: '', product: '' }
+function parseSellerCode(code) {
+  const s = String(code || '').trim();
+  const bi = s.indexOf(']');
+  if (bi === -1) return { supplier: '', product: '' };
+  const supplier = s.slice(0, bi).trim();
+  let rest = s.slice(bi + 1).trim();
+  const slash = rest.indexOf('/');
+  if (slash >= 0) rest = rest.slice(0, slash).trim();
+  const product = /^\d+$/.test(rest) ? '' : rest;
+  return { supplier, product };
+}
+
 // 헤더 별칭 → 표준 필드 매핑
 const FIELD_ALIASES = {
   no: ['번호', 'no', 'idx'],
@@ -187,19 +219,108 @@ function parseSheet(ws, sheetName) {
   return { rows, business };
 }
 
+// 오픈마켓 통합 주문내역(원본) 양식 여부 판별 + 헤더 행 탐색
+function findRawHeaderRow(json) {
+  for (let i = 0; i < Math.min(10, json.length); i++) {
+    const row = (json[i] || []).map(normalizeHeader);
+    if (row.includes('별칭(쇼핑몰계정)') && row.includes('총주문금액')) return i;
+    if (row.includes('주문일시') && row.includes('총주문금액')) return i;
+  }
+  return -1;
+}
+
+// 오픈마켓 통합 주문내역(원본) 시트 파싱
+function parseRawOrderSheet(json, headerIdx) {
+  const headerRow = (json[headerIdx] || []).map(normalizeHeader);
+  const idx = (name) => headerRow.indexOf(normalizeHeader(name));
+  const c = {
+    date: idx('주문일시'),
+    alias: idx('별칭(쇼핑몰계정)'),
+    productName: idx('상품명'),
+    spec: idx('선택사항'),
+    code: idx('판매자상품코드'),
+    qty: idx('수량'),
+    unit: idx('단가'),
+    revenue: idx('총주문금액'),
+    fee: idx('마켓수수료금액'),
+    shipping: idx('배송비'),
+    orderNo: idx('주문번호')
+  };
+
+  const rows = [];
+  for (let i = headerIdx + 1; i < json.length; i++) {
+    const r = json[i] || [];
+    const orderDate = parseDate(c.date >= 0 ? r[c.date] : '');
+    if (!orderDate) continue;
+
+    const { platform, store } = parseAccountAlias(c.alias >= 0 ? r[c.alias] : '');
+    const { supplier, product: codeProduct } = parseSellerCode(c.code >= 0 ? r[c.code] : '');
+    const business = STORE_TO_BUSINESS[store] || store || '미지정';
+
+    let product = codeProduct;
+    if (!product) {
+      product = String(c.productName >= 0 ? r[c.productName] : '').trim();
+      if (store && product.startsWith(store)) product = product.slice(store.length).trim();
+    }
+
+    const qty = c.qty >= 0 ? parseNumber(r[c.qty]) || 1 : 1;
+    const revenue =
+      (c.revenue >= 0 ? parseNumber(r[c.revenue]) : 0) ||
+      (c.unit >= 0 ? parseNumber(r[c.unit]) * qty : 0);
+
+    const order = {
+      date: toISODate(orderDate),
+      dispatchDate: '',
+      business,
+      taxType: business === '그로븐' ? '면세' : business === '옐로우브릿지' ? '과세' : '',
+      supplier,
+      platform,
+      product,
+      spec: c.spec >= 0 ? String(r[c.spec] || '').trim() : '',
+      quantity: qty,
+      revenue,
+      cost: 0,
+      shipping: c.shipping >= 0 ? parseNumber(r[c.shipping]) : 0,
+      fee: c.fee >= 0 ? parseNumber(r[c.fee]) : 0,
+      vat: 0,
+      labor: 0,
+      ad: 0,
+      orderNo: c.orderNo >= 0 ? String(r[c.orderNo] || '').trim() : '',
+      note: ''
+    };
+    rows.push(order);
+  }
+  return rows;
+}
+
 export function parseExcelMultiSheet(arrayBuffer) {
   const wb = XLSX.read(arrayBuffer, { type: 'array', cellDates: true });
   const allRows = [];
   const sheetInfo = [];
   const warnings = [];
+  let format = 'summary';
 
   for (const sheetName of wb.SheetNames) {
+    const ws = wb.Sheets[sheetName];
+    const json = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false });
+
+    // 오픈마켓 통합 주문내역(원본) 양식 우선 판별
+    const rawHeaderIdx = findRawHeaderRow(json);
+    if (rawHeaderIdx !== -1) {
+      const rawRows = parseRawOrderSheet(json, rawHeaderIdx);
+      if (rawRows.length > 0) {
+        format = 'raw';
+        allRows.push(...rawRows);
+        sheetInfo.push({ sheetName, business: '주문내역(원본)', count: rawRows.length });
+      }
+      continue;
+    }
+
     // 보고용·요약·CS 시트는 건너뛰기 (헤더 탐지로 자동 필터되지만 명시적 제외도)
     if (/^sheet\d*$/i.test(sheetName) && sheetName !== 'Sheet1') continue;
     if (sheetName.includes('보고용')) continue;
     if (sheetName === 'CS리스트') continue;
 
-    const ws = wb.Sheets[sheetName];
     const result = parseSheet(ws, sheetName);
     if (result.rows.length > 0) {
       allRows.push(...result.rows);
@@ -215,7 +336,7 @@ export function parseExcelMultiSheet(arrayBuffer) {
     warnings.push('인식 가능한 데이터를 찾지 못했습니다. 시트의 헤더 구조를 확인해주세요.');
   }
 
-  return { rows: allRows, sheetInfo, warnings };
+  return { rows: allRows, sheetInfo, warnings, format };
 }
 
 // 단일 시트 / CSV 파싱 (구버전 호환)

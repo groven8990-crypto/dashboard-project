@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { parseFile, exportCSV } from '../utils/csvParser.js';
+import { suggestCost } from '../utils/priceBook.js';
 import { generateSampleData } from '../data/sampleData.js';
 
 export default function DataUploader({ onLoad, currentRows, onClear }) {
@@ -13,11 +14,47 @@ export default function DataUploader({ onLoad, currentRows, onClear }) {
     try {
       setStatus({ type: 'info', msg: '파일 파싱 중...' });
       const result = await parseFile(files[0]);
-      const { rows, warnings, sheetInfo } = result;
+      const { rows, warnings, sheetInfo, format } = result;
       if (!rows.length) {
         setStatus({ type: 'error', msg: '인식 가능한 데이터가 없습니다.' });
         return;
       }
+
+      // 오픈마켓 통합 주문내역(원본): 매입가 자동추정 후 기존 데이터에 추가
+      if (format === 'raw') {
+        let filled = 0;
+        const withCost = rows.map((r) => {
+          if (r.cost > 0 || !r.product || !(r.revenue > 0)) return r;
+          const s = suggestCost(currentRows, {
+            product: r.product,
+            spec: r.spec,
+            supplier: r.supplier
+          });
+          if (s && s.value > 0) {
+            filled++;
+            return { ...r, cost: s.value };
+          }
+          return r;
+        });
+        // 주문번호 기준 중복 제거 (같은 파일 재업로드 안전)
+        const existing = new Set(currentRows.map((r) => r.orderNo).filter(Boolean));
+        const deduped = withCost.filter((r) => !r.orderNo || !existing.has(r.orderNo));
+        const dup = withCost.length - deduped.length;
+        const noCost = deduped.filter((r) => !(r.cost > 0)).length;
+
+        onLoad(deduped, { append: true });
+        const w = [...(warnings || [])];
+        if (noCost > 0) {
+          w.push(`매입가를 못 채운 ${noCost}건은 0원입니다. "주문 한 건 입력"의 수정 또는 과거 데이터 보강 후 다시 올려주세요.`);
+        }
+        setWarnings(w);
+        const parts = [`${deduped.length}건 추가`];
+        if (dup > 0) parts.push(`중복 ${dup}건 제외`);
+        if (filled > 0) parts.push(`매입가 자동추정 ${filled}건`);
+        setStatus({ type: 'success', msg: '📦 주문내역 원본 인식 — ' + parts.join(' · ') });
+        return;
+      }
+
       onLoad(rows, { append: false });
       setWarnings(warnings || []);
       const sheetMsg = sheetInfo && sheetInfo.length
@@ -139,7 +176,10 @@ export default function DataUploader({ onLoad, currentRows, onClear }) {
         <h3>📂 파일을 끌어다 놓거나 클릭해서 선택하세요</h3>
         <p>CSV / XLSX / XLS · 한글 헤더 자동 인식</p>
         <p className="text-xs muted">
-          인식 컬럼: 날짜 · 사업자 · 채널 · 매출 · 매입 · 인건비 · 광고비 · 판매수수료 · 부가세
+          요약본(사업자별 시트) 또는 오픈마켓 통합 주문내역(원본) 모두 자동 인식됩니다.
+        </p>
+        <p className="text-xs muted">
+          원본 주문내역은 기존 데이터에 추가되며(중복 자동 제외), 매입가는 과거 이력으로 자동 추정됩니다.
         </p>
         <input
           ref={inputRef}
