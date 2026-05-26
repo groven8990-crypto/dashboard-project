@@ -133,18 +133,19 @@ function shortenProductName(name, store) {
 // 헤더 별칭 → 표준 필드 매핑
 const FIELD_ALIASES = {
   no: ['번호', 'no', 'idx'],
+  orderNo: ['주문번호', '주문no', '오더번호', '주문코드'],
   taxType: ['과세', '과세구분', '면세과세'],
   supplier: ['매입처', '공급처', '거래처', '발주처'],
-  orderDate: ['주문일', '주문일자', '판매일', '거래일', '일자', '날짜'],
-  dispatchDate: ['발주일자', '발주일'],
+  orderDate: ['주문일시', '주문일', '주문일자', '판매일', '거래일', '일자', '날짜'],
+  dispatchDate: ['발주일자', '발주일', '발주일시'],
   weekday: ['요일'],
   platform: ['판매처', '채널', '판매채널', '플랫폼', '쇼핑몰'],
   product: ['제품명', '상품명', '품목', '상품'],
   spec: ['규격', '옵션', '사이즈'],
   quantity: ['수량', 'qty'],
-  recipient: ['수취인명', '수취인', '받는사람'],
-  phone: ['휴대폰번호', '연락처', '전화번호'],
-  address: ['주소', '배송지'],
+  recipient: ['수취인명', '수취인', '수령인', '받는사람', '받는분', '수하인'],
+  phone: ['수취인연락처', '휴대폰번호', '연락처', '전화번호', '핸드폰', '휴대전화'],
+  address: ['배송지주소', '수취인주소', '배송주소', '주소', '배송지'],
   revenue: ['주문금액', '매출액', '매출', '판매액', '결제금액', '공급금액'],
   cost: ['매입가', '매입액', '원가', '구매가', '상품원가'],
   shipping: ['배송비', '3pl', '택배비'],
@@ -154,6 +155,7 @@ const FIELD_ALIASES = {
   margin: ['마진액', '마진'],
   labor: ['인건비', '급여'],
   ad: ['광고비', '마케팅비'],
+  invoice: ['송장번호', '운송장번호', '운송장', '송장', '택배송장'],
   note: ['비고', '메모', '설명'],
   business: ['사업자', '사업장', '브랜드', '회사']
 };
@@ -187,13 +189,26 @@ function parseNumber(v) {
   return isNaN(n) ? 0 : n;
 }
 
+// 셀 값에서 시각(HH:MM)을 추출. 시간 정보가 없으면 ''.
+function extractTime(v) {
+  if (v instanceof Date) {
+    const hh = v.getHours();
+    const mm = v.getMinutes();
+    if (hh === 0 && mm === 0 && v.getSeconds() === 0) return '';
+    return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+  }
+  const m = String(v || '').match(/(\d{1,2}):(\d{2})/);
+  if (!m) return '';
+  return `${String(+m[1]).padStart(2, '0')}:${m[2]}`;
+}
+
 // 헤더 행 자동 탐지 - "번호" + "제품명" 또는 "주문일" 등이 포함된 행을 찾음
 function findHeaderRow(jsonRows) {
   for (let i = 0; i < Math.min(10, jsonRows.length); i++) {
     const row = (jsonRows[i] || []).map(normalizeHeader);
     const hasNo = row.includes('번호');
     const hasProduct = row.includes('제품명') || row.includes('상품명');
-    const hasOrderDate = row.includes('주문일') || row.includes('주문일자');
+    const hasOrderDate = row.includes('주문일') || row.includes('주문일자') || row.includes('주문일시');
     if (hasNo && (hasProduct || hasOrderDate)) return i;
   }
   return -1;
@@ -254,6 +269,7 @@ function parseSheet(ws, sheetName) {
 
     const order = {
       date: toISODate(orderDate),
+      orderTime: colMap.orderDate !== undefined ? extractTime(r[colMap.orderDate]) : '',
       dispatchDate: colMap.dispatchDate !== undefined
         ? (parseDate(r[colMap.dispatchDate]) ? toISODate(parseDate(r[colMap.dispatchDate])) : '')
         : '',
@@ -271,6 +287,11 @@ function parseSheet(ws, sheetName) {
       vat: colMap.vat !== undefined ? parseNumber(r[colMap.vat]) : 0,
       labor: colMap.labor !== undefined ? parseNumber(r[colMap.labor]) : 0,
       ad: colMap.ad !== undefined ? parseNumber(r[colMap.ad]) : 0,
+      orderNo: colMap.orderNo !== undefined ? String(r[colMap.orderNo] || '').trim() : '',
+      recipient: colMap.recipient !== undefined ? String(r[colMap.recipient] || '').trim() : '',
+      phone: colMap.phone !== undefined ? String(r[colMap.phone] || '').trim() : '',
+      address: colMap.address !== undefined ? String(r[colMap.address] || '').trim() : '',
+      invoice: colMap.invoice !== undefined ? String(r[colMap.invoice] || '').trim() : '',
       note: colMap.note !== undefined ? String(r[colMap.note] || '').trim() : ''
     };
 
@@ -299,6 +320,14 @@ function findRawHeaderRow(json) {
 function parseRawOrderSheet(json, headerIdx) {
   const headerRow = (json[headerIdx] || []).map(normalizeHeader);
   const idx = (name) => headerRow.indexOf(normalizeHeader(name));
+  // 여러 후보 헤더명 중 처음 일치하는 열을 찾음
+  const idxAny = (...names) => {
+    for (const n of names) {
+      const i = idx(n);
+      if (i >= 0) return i;
+    }
+    return -1;
+  };
   const c = {
     date: idx('주문일시'),
     alias: idx('별칭(쇼핑몰계정)'),
@@ -312,7 +341,11 @@ function parseRawOrderSheet(json, headerIdx) {
     discount: idx('할인금액'),
     fee: idx('마켓수수료금액'),
     shipping: idx('배송비'),
-    orderNo: idx('주문번호')
+    orderNo: idx('주문번호'),
+    recipient: idxAny('수취인명', '수취인', '수령인', '받는사람', '받는분', '수하인'),
+    phone: idxAny('수취인연락처', '수취인전화번호', '휴대폰번호', '연락처', '전화번호'),
+    address: idxAny('수취인주소', '배송지주소', '배송주소', '주소', '배송지'),
+    invoice: idxAny('송장번호', '운송장번호', '운송장', '송장')
   };
 
   const dataRows = [];
@@ -357,6 +390,7 @@ function parseRawOrderSheet(json, headerIdx) {
 
     rows.push({
       date: toISODate(orderDate),
+      orderTime: c.date >= 0 ? extractTime(r[c.date]) : '',
       dispatchDate: '',
       business,
       taxType: business === '그로븐' ? '면세' : business === '옐로우브릿지' ? '과세' : '',
@@ -373,6 +407,10 @@ function parseRawOrderSheet(json, headerIdx) {
       labor: 0,
       ad: 0,
       orderNo: c.orderNo >= 0 ? String(r[c.orderNo] || '').trim() : '',
+      recipient: c.recipient >= 0 ? String(r[c.recipient] || '').trim() : '',
+      phone: c.phone >= 0 ? String(r[c.phone] || '').trim() : '',
+      address: c.address >= 0 ? String(r[c.address] || '').trim() : '',
+      invoice: c.invoice >= 0 ? String(r[c.invoice] || '').trim() : '',
       note: ''
     });
   }
@@ -500,7 +538,9 @@ export function exportCSV(rows) {
   const csv = Papa.unparse(
     rows.map((r) => ({
       날짜: r.date,
+      주문시간: r.orderTime || '',
       발주일자: r.dispatchDate || '',
+      주문번호: r.orderNo || '',
       사업자: r.business,
       과세: r.taxType,
       매입처: r.supplier,
@@ -515,6 +555,10 @@ export function exportCSV(rows) {
       부가세: r.vat,
       인건비: r.labor,
       광고비: r.ad,
+      수취인: r.recipient || '',
+      연락처: r.phone || '',
+      주소: r.address || '',
+      송장번호: r.invoice || '',
       비고: r.note
     }))
   );

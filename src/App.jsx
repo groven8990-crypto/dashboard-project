@@ -20,6 +20,7 @@ import { normalizeSupplier } from './utils/csvParser.js';
 import { createSyncManager, getCloudConfig } from './utils/cloudSync.js';
 import { loadAdCosts, saveAdCosts, applyAdCosts } from './utils/adCosts.js';
 import { loadBizInfo, saveBizInfo } from './utils/bizInfo.js';
+import { loadCsInfo, saveCsInfo } from './utils/csInfo.js';
 import {
   aggregate,
   filterRows,
@@ -62,6 +63,7 @@ export default function App() {
   const [rows, setRows] = useState(loadStored);
   const [adCosts, setAdCosts] = useState(loadAdCosts);
   const [bizInfo, setBizInfo] = useState(loadBizInfo);
+  const [csInfo, setCsInfo] = useState(loadCsInfo);
   const [tab, setTab] = useState('overview');
   const [reportView, setReportView] = useState('daily');
   const [granularity, setGranularity] = useState('day');
@@ -73,9 +75,11 @@ export default function App() {
   const rowsRef = React.useRef(rows);
   const adCostsRef = React.useRef(adCosts);
   const bizInfoRef = React.useRef(bizInfo);
+  const csInfoRef = React.useRef(csInfo);
   React.useEffect(() => { rowsRef.current = rows; }, [rows]);
   React.useEffect(() => { adCostsRef.current = adCosts; }, [adCosts]);
   React.useEffect(() => { bizInfoRef.current = bizInfo; }, [bizInfo]);
+  React.useEffect(() => { csInfoRef.current = csInfo; }, [csInfo]);
 
   // 클라우드 동기화 매니저 초기화
   React.useEffect(() => {
@@ -84,20 +88,21 @@ export default function App() {
       getData: () => ({
         rows: rowsRef.current,
         adCosts: adCostsRef.current,
-        bizInfo: bizInfoRef.current
+        bizInfo: bizInfoRef.current,
+        csInfo: csInfoRef.current
       }),
       onStatus: setSyncStatus
     });
   }, []);
 
-  // rows/광고비/사업자정보 변경 시 자동 업로드 (debounced 2초)
+  // rows/광고비/사업자정보/CS정보 변경 시 자동 업로드 (debounced 2초)
   React.useEffect(() => {
     if (!initialized) return;
     const cfg = getCloudConfig();
     if (cfg && cfg.gistId) {
       syncManagerRef.current?.scheduleSync();
     }
-  }, [rows, adCosts, bizInfo, initialized]);
+  }, [rows, adCosts, bizInfo, csInfo, initialized]);
 
   // Persist rows
   useEffect(() => {
@@ -117,6 +122,16 @@ export default function App() {
   useEffect(() => {
     saveBizInfo(bizInfo);
   }, [bizInfo]);
+
+  // Persist 송장·CS 정보
+  useEffect(() => {
+    saveCsInfo(csInfo);
+  }, [csInfo]);
+
+  const handleCsChange = (key, patch) => {
+    if (!key) return;
+    setCsInfo((prev) => ({ ...prev, [key]: { ...(prev[key] || {}), ...patch } }));
+  };
 
   // 월별 광고비를 일할계산하여 반영한 분석용 행
   const effectiveRows = useMemo(() => applyAdCosts(rows, adCosts), [rows, adCosts]);
@@ -316,7 +331,7 @@ export default function App() {
         )}
 
         {hasData && tab === 'ledger' && (
-          <SupplierLedger rows={filtered} />
+          <SupplierLedger rows={filtered} csInfo={csInfo} onCsChange={handleCsChange} />
         )}
 
         {hasData && tab === 'daily' && (
@@ -356,11 +371,13 @@ export default function App() {
               rows={rows}
               adCosts={adCosts}
               bizInfo={bizInfo}
-              onPull={(pulledRows, newAdCosts, newBizInfo) => {
+              csInfo={csInfo}
+              onPull={(pulledRows, newAdCosts, newBizInfo, newCsInfo) => {
                 const newRows = migrateSuppliers(pulledRows);
                 setRows(newRows);
                 if (Array.isArray(newAdCosts)) setAdCosts(newAdCosts);
                 if (Array.isArray(newBizInfo)) setBizInfo(newBizInfo);
+                if (newCsInfo && typeof newCsInfo === 'object') setCsInfo(newCsInfo);
                 if (newRows.length) {
                   const r = getDateRange(newRows);
                   setRange({ from: r.min, to: r.max });

@@ -1,11 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { fmtKRW, fmtNum } from '../utils/format.js';
+import { orderKey, CS_STATUSES } from '../utils/csInfo.js';
 
 function fmt(n) {
   return Math.round(n || 0).toLocaleString('ko-KR');
 }
 
-export default function SupplierLedger({ rows, range, onRangeChange }) {
+export default function SupplierLedger({ rows, csInfo = {}, onCsChange }) {
   const [selectedSupplier, setSelectedSupplier] = useState('');
   const [sortField, setSortField] = useState('date');
   const [sortAsc, setSortAsc] = useState(false);
@@ -148,7 +149,7 @@ export default function SupplierLedger({ rows, range, onRangeChange }) {
               )}
             </div>
             <div className="card-subtitle">
-              {detailRows.length.toLocaleString()}건 · 매입 배송비를 거래처 청구서와 대조하세요
+              {detailRows.length.toLocaleString()}건 · 주문자 인적사항·송장번호·CS를 한 줄에서 관리하세요
             </div>
           </div>
           <div className="filter-group">
@@ -171,10 +172,11 @@ export default function SupplierLedger({ rows, range, onRangeChange }) {
         </div>
 
         <div style={{ overflowX: 'auto' }}>
-          <table className="table">
+          <table className="table" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
             <thead>
               <tr>
-                <th style={{ cursor: 'pointer' }} onClick={() => toggleSort('date')}>날짜{sortIcon('date')}</th>
+                <th style={{ cursor: 'pointer' }} onClick={() => toggleSort('date')}>주문일시{sortIcon('date')}</th>
+                <th style={{ cursor: 'pointer' }} onClick={() => toggleSort('dispatchDate')}>발주일자{sortIcon('dispatchDate')}</th>
                 <th>거래처</th>
                 <th style={{ cursor: 'pointer' }} onClick={() => toggleSort('product')}>제품명{sortIcon('product')}</th>
                 <th>규격</th>
@@ -183,38 +185,90 @@ export default function SupplierLedger({ rows, range, onRangeChange }) {
                 <th style={{ cursor: 'pointer', textAlign: 'right' }} onClick={() => toggleSort('cost')}>매입가{sortIcon('cost')}</th>
                 <th style={{ cursor: 'pointer', textAlign: 'right' }} onClick={() => toggleSort('shipping')}>매입 배송비{sortIcon('shipping')}</th>
                 <th style={{ textAlign: 'right' }}>수수료</th>
+                <th>수취인</th>
+                <th>연락처</th>
+                <th>주소</th>
+                <th>송장번호</th>
+                <th>CS상태</th>
+                <th>CS메모</th>
                 <th>주문번호</th>
                 <th>판매처</th>
-                <th>사업자</th>
               </tr>
             </thead>
             <tbody>
-              {detailRows.map((r, i) => (
-                <tr key={r.orderNo || i}>
-                  <td style={{ whiteSpace: 'nowrap' }}>{r.date}</td>
-                  <td>{r.supplier || '—'}</td>
-                  <td>{r.product || '—'}</td>
-                  <td style={{ color: 'var(--muted)', fontSize: 12 }}>{r.spec || ''}</td>
-                  <td className="num">{r.quantity || 1}</td>
-                  <td className="num">{fmt(r.revenue)}</td>
-                  <td className="num" style={{ color: r.cost > 0 ? undefined : 'var(--muted)' }}>
-                    {r.cost > 0 ? fmt(r.cost) : '—'}
-                  </td>
-                  <td className="num" style={{ color: (r.shipping || 0) > 0 ? 'var(--warning)' : 'var(--muted)' }}>
-                    {(r.shipping || 0) > 0 ? fmt(r.shipping) : '—'}
-                  </td>
-                  <td className="num">{r.fee > 0 ? fmt(r.fee) : '—'}</td>
-                  <td style={{ fontSize: 11, color: 'var(--muted)', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {r.orderNo || ''}
-                  </td>
-                  <td style={{ fontSize: 12 }}>{r.platform || ''}</td>
-                  <td style={{ fontSize: 12 }}>{r.business || ''}</td>
-                </tr>
-              ))}
+              {detailRows.map((r, i) => {
+                const key = orderKey(r);
+                const cs = csInfo[key] || {};
+                const invoiceVal = cs.invoice !== undefined ? cs.invoice : (r.invoice || '');
+                return (
+                  <tr key={key || i}>
+                    <td>
+                      {r.date}
+                      {r.orderTime ? <span style={{ color: 'var(--muted)', marginLeft: 4 }}>{r.orderTime}</span> : null}
+                    </td>
+                    <td>{r.dispatchDate || '—'}</td>
+                    <td>{r.supplier || '—'}</td>
+                    <td style={{ whiteSpace: 'normal' }}>{r.product || '—'}</td>
+                    <td style={{ color: 'var(--muted)' }}>{r.spec || ''}</td>
+                    <td className="num">{r.quantity || 1}</td>
+                    <td className="num">{fmt(r.revenue)}</td>
+                    <td className="num" style={{ color: r.cost > 0 ? undefined : 'var(--muted)' }}>
+                      {r.cost > 0 ? fmt(r.cost) : '—'}
+                    </td>
+                    <td className="num" style={{ color: (r.shipping || 0) > 0 ? 'var(--warning)' : 'var(--muted)' }}>
+                      {(r.shipping || 0) > 0 ? fmt(r.shipping) : '—'}
+                    </td>
+                    <td className="num">{r.fee > 0 ? fmt(r.fee) : '—'}</td>
+                    <td>{r.recipient || '—'}</td>
+                    <td>{r.phone || '—'}</td>
+                    <td
+                      style={{ whiteSpace: 'normal', maxWidth: 220, color: 'var(--muted)' }}
+                      title={r.address || ''}
+                    >
+                      {r.address || '—'}
+                    </td>
+                    <td>
+                      <input
+                        className="input"
+                        style={{ width: 130, fontSize: 12, padding: '2px 6px' }}
+                        placeholder="송장번호"
+                        value={invoiceVal}
+                        disabled={!onCsChange}
+                        onChange={(e) => onCsChange && onCsChange(key, { invoice: e.target.value })}
+                      />
+                    </td>
+                    <td>
+                      <select
+                        className="select"
+                        style={{ fontSize: 12, padding: '2px 6px' }}
+                        value={cs.csStatus || ''}
+                        disabled={!onCsChange}
+                        onChange={(e) => onCsChange && onCsChange(key, { csStatus: e.target.value })}
+                      >
+                        {CS_STATUSES.map((s) => (
+                          <option key={s} value={s}>{s || '—'}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      <input
+                        className="input"
+                        style={{ width: 160, fontSize: 12, padding: '2px 6px' }}
+                        placeholder="CS 메모"
+                        value={cs.csMemo || ''}
+                        disabled={!onCsChange}
+                        onChange={(e) => onCsChange && onCsChange(key, { csMemo: e.target.value })}
+                      />
+                    </td>
+                    <td style={{ color: 'var(--muted)' }}>{r.orderNo || ''}</td>
+                    <td>{r.platform || ''}</td>
+                  </tr>
+                );
+              })}
             </tbody>
             <tfoot>
               <tr>
-                <td colSpan={4}><strong>합계 ({detailTotals.orders.toLocaleString()}건)</strong></td>
+                <td colSpan={5}><strong>합계 ({detailTotals.orders.toLocaleString()}건)</strong></td>
                 <td className="num"><strong>{fmt(detailRows.reduce((s, r) => s + (r.quantity || 1), 0))}</strong></td>
                 <td className="num"><strong>{fmt(detailTotals.revenue)}</strong></td>
                 <td className="num"><strong>{fmt(detailTotals.cost)}</strong></td>
@@ -222,7 +276,7 @@ export default function SupplierLedger({ rows, range, onRangeChange }) {
                   <strong>{fmt(detailTotals.shipping)}</strong>
                 </td>
                 <td className="num"><strong>{fmt(detailTotals.fee)}</strong></td>
-                <td colSpan={3} />
+                <td colSpan={8} />
               </tr>
             </tfoot>
           </table>
