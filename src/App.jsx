@@ -15,9 +15,11 @@ import SupplierAnalysis from './components/SupplierAnalysis.jsx';
 import SupplierLedger from './components/SupplierLedger.jsx';
 import CloudSync from './components/CloudSync.jsx';
 import AdCostManager from './components/AdCostManager.jsx';
+import BizInfoManager from './components/BizInfoManager.jsx';
 import { normalizeSupplier } from './utils/csvParser.js';
 import { createSyncManager, getCloudConfig } from './utils/cloudSync.js';
 import { loadAdCosts, saveAdCosts, applyAdCosts } from './utils/adCosts.js';
+import { loadBizInfo, saveBizInfo } from './utils/bizInfo.js';
 import {
   aggregate,
   filterRows,
@@ -59,6 +61,7 @@ function loadPrefs() {
 export default function App() {
   const [rows, setRows] = useState(loadStored);
   const [adCosts, setAdCosts] = useState(loadAdCosts);
+  const [bizInfo, setBizInfo] = useState(loadBizInfo);
   const [tab, setTab] = useState('overview');
   const [reportView, setReportView] = useState('daily');
   const [granularity, setGranularity] = useState('day');
@@ -69,26 +72,32 @@ export default function App() {
   const syncManagerRef = React.useRef(null);
   const rowsRef = React.useRef(rows);
   const adCostsRef = React.useRef(adCosts);
+  const bizInfoRef = React.useRef(bizInfo);
   React.useEffect(() => { rowsRef.current = rows; }, [rows]);
   React.useEffect(() => { adCostsRef.current = adCosts; }, [adCosts]);
+  React.useEffect(() => { bizInfoRef.current = bizInfo; }, [bizInfo]);
 
   // 클라우드 동기화 매니저 초기화
   React.useEffect(() => {
     syncManagerRef.current = createSyncManager({
       getConfig: getCloudConfig,
-      getData: () => ({ rows: rowsRef.current, adCosts: adCostsRef.current }),
+      getData: () => ({
+        rows: rowsRef.current,
+        adCosts: adCostsRef.current,
+        bizInfo: bizInfoRef.current
+      }),
       onStatus: setSyncStatus
     });
   }, []);
 
-  // rows/광고비 변경 시 자동 업로드 (debounced 2초)
+  // rows/광고비/사업자정보 변경 시 자동 업로드 (debounced 2초)
   React.useEffect(() => {
     if (!initialized) return;
     const cfg = getCloudConfig();
     if (cfg && cfg.gistId) {
       syncManagerRef.current?.scheduleSync();
     }
-  }, [rows, adCosts, initialized]);
+  }, [rows, adCosts, bizInfo, initialized]);
 
   // Persist rows
   useEffect(() => {
@@ -103,6 +112,11 @@ export default function App() {
   useEffect(() => {
     saveAdCosts(adCosts);
   }, [adCosts]);
+
+  // Persist 사업자 정보
+  useEffect(() => {
+    saveBizInfo(bizInfo);
+  }, [bizInfo]);
 
   // 월별 광고비를 일할계산하여 반영한 분석용 행
   const effectiveRows = useMemo(() => applyAdCosts(rows, adCosts), [rows, adCosts]);
@@ -341,10 +355,12 @@ export default function App() {
             <CloudSync
               rows={rows}
               adCosts={adCosts}
-              onPull={(pulledRows, newAdCosts) => {
+              bizInfo={bizInfo}
+              onPull={(pulledRows, newAdCosts, newBizInfo) => {
                 const newRows = migrateSuppliers(pulledRows);
                 setRows(newRows);
                 if (Array.isArray(newAdCosts)) setAdCosts(newAdCosts);
+                if (Array.isArray(newBizInfo)) setBizInfo(newBizInfo);
                 if (newRows.length) {
                   const r = getDateRange(newRows);
                   setRange({ from: r.min, to: r.max });
@@ -352,6 +368,7 @@ export default function App() {
                 }
               }}
             />
+            <BizInfoManager businesses={businesses} bizInfo={bizInfo} onChange={setBizInfo} />
             <AdCostManager rows={rows} adCosts={adCosts} onChange={setAdCosts} />
             <FormatGuide />
             <ManualEntry

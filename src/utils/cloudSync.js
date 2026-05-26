@@ -54,17 +54,22 @@ export async function validateToken(token) {
 
 function normalizePayload(payload) {
   // 하위호환: rows 배열만 넘어오면 { rows } 로 감싼다
-  if (Array.isArray(payload)) return { rows: payload, adCosts: [] };
-  return { rows: payload?.rows || [], adCosts: payload?.adCosts || [] };
+  if (Array.isArray(payload)) return { rows: payload, adCosts: [], bizInfo: [] };
+  return {
+    rows: payload?.rows || [],
+    adCosts: payload?.adCosts || [],
+    bizInfo: payload?.bizInfo || []
+  };
 }
 
 function serializeContent(payload) {
-  const { rows, adCosts } = normalizePayload(payload);
+  const { rows, adCosts, bizInfo } = normalizePayload(payload);
   return JSON.stringify({
     version: 2,
     updatedAt: new Date().toISOString(),
     rows,
-    adCosts
+    adCosts,
+    bizInfo
   });
 }
 
@@ -109,6 +114,7 @@ export async function fetchGistData(token, gistId) {
     return {
       rows: parsed.rows || [],
       adCosts: parsed.adCosts || [],
+      bizInfo: parsed.bizInfo || [],
       updatedAt: parsed.updatedAt || data.updated_at
     };
   } catch (e) {
