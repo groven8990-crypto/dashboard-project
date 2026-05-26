@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { fmtKRW, fmtPct, fmtDelta } from '../utils/format.js';
-import { aggregate, groupByBusiness, groupByPlatform } from '../utils/analytics.js';
+import { aggregate, groupByBusiness, groupByPlatform, groupByProduct } from '../utils/analytics.js';
 import { todayISO, addDays, fmtKDate, parseDate } from '../utils/dateUtils.js';
 
 export default function DailyReport({ rows, dataRange }) {
@@ -32,7 +32,6 @@ export default function DailyReport({ rows, dataRange }) {
   const mtd = aggregate(mtdRows);
 
   const byBusiness = groupByBusiness(todayRows);
-  const byChannel = groupByPlatform(todayRows).map((p) => ({ ...p, channel: p.platform }));
 
   const dRev = fmtDelta(today.revenue, yesterday.revenue);
   const dRevW = fmtDelta(today.revenue, lastWeek.revenue);
@@ -179,29 +178,95 @@ export default function DailyReport({ rows, dataRange }) {
           </div>
         )}
 
-        {byChannel.length > 0 && (
+        {byBusiness.length > 0 && (
           <div className="report-section">
-            <div className="report-section-title">3. 채널별 실적</div>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>채널</th>
-                  <th>매출</th>
-                  <th>순마진</th>
-                  <th>마진율</th>
-                </tr>
-              </thead>
-              <tbody>
-                {byChannel.map((c) => (
-                  <tr key={c.channel}>
-                    <td>{c.channel}</td>
-                    <td className="num">{fmtKRW(c.revenue)}</td>
-                    <td className={`num ${c.margin >= 0 ? 'pos' : 'neg'}`}>{fmtKRW(c.margin)}</td>
-                    <td>{fmtPct(c.marginRate)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="report-section-title">3. 사업자별 주문 현황 (제품·채널)</div>
+            {byBusiness.map((b) => {
+              const bizRows = todayRows.filter((r) => r.business === b.business);
+              const products = groupByProduct(bizRows);
+              const channels = groupByPlatform(bizRows);
+              return (
+                <div key={b.business} style={{ marginBottom: 18 }}>
+                  <div
+                    style={{
+                      fontWeight: 700,
+                      fontSize: 14,
+                      padding: '6px 10px',
+                      background: 'var(--primary-soft)',
+                      color: 'var(--primary)',
+                      borderRadius: 6,
+                      marginBottom: 8
+                    }}
+                  >
+                    {b.business} · 총 {b.orderCount.toLocaleString()}건 · 매출 {fmtKRW(b.revenue)}
+                  </div>
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                      gap: 14
+                    }}
+                  >
+                    <div>
+                      <div className="card-subtitle mb-8">제품별 주문 현황</div>
+                      <table className="table">
+                        <thead>
+                          <tr>
+                            <th>제품명</th>
+                            <th>주문건수</th>
+                            <th>주문금액</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {products.map((p) => (
+                            <tr key={p.product}>
+                              <td>{p.product}</td>
+                              <td className="num">{p.orderCount.toLocaleString()}</td>
+                              <td className="num">{fmtKRW(p.revenue)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr>
+                            <td>합계</td>
+                            <td className="num">{b.orderCount.toLocaleString()}</td>
+                            <td className="num">{fmtKRW(b.revenue)}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                    <div>
+                      <div className="card-subtitle mb-8">채널별 주문 현황</div>
+                      <table className="table">
+                        <thead>
+                          <tr>
+                            <th>채널</th>
+                            <th>주문건수</th>
+                            <th>주문금액</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {channels.map((c) => (
+                            <tr key={c.platform}>
+                              <td>{c.platform}</td>
+                              <td className="num">{c.orderCount.toLocaleString()}</td>
+                              <td className="num">{fmtKRW(c.revenue)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr>
+                            <td>합계</td>
+                            <td className="num">{b.orderCount.toLocaleString()}</td>
+                            <td className="num">{fmtKRW(b.revenue)}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
 
