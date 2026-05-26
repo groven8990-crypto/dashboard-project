@@ -3,6 +3,13 @@ import { fmtKRW, fmtPct, fmtDelta } from '../utils/format.js';
 import { aggregate, groupByBusiness, groupByPlatform, groupByProduct } from '../utils/analytics.js';
 import { todayISO, addDays, fmtKDate, parseDate } from '../utils/dateUtils.js';
 
+// 주문 마감 시각 (발주 기준). 기본 + 거래처별 예외
+const ORDER_CUTOFF_DEFAULT = '오전 10시';
+const ORDER_CUTOFF_EXCEPTIONS = [
+  { vendor: '주식회사 일비', cutoff: '오후 1시' },
+  { vendor: '(주)푸드엔드베스트', cutoff: '오전 11시' }
+];
+
 export default function DailyReport({ rows, dataRange }) {
   const defaultDate = dataRange.max || todayISO();
   const [date, setDate] = useState(defaultDate);
@@ -31,6 +38,29 @@ export default function DailyReport({ rows, dataRange }) {
   const lastWeek = aggregate(lastWeekRows);
   const mtd = aggregate(mtdRows);
 
+  // 이 발주일에 포함된 주문들의 실제 주문일자(고객 주문) 수집 기간
+  const orderSpan = useMemo(() => {
+    const dts = todayRows
+      .map((r) => ({ date: r.orderDate || r.date, time: r.orderTime || '' }))
+      .filter((x) => x.date);
+    if (!dts.length) return null;
+    const k = (x) => `${x.date} ${x.time || '00:00'}`;
+    let min = dts[0];
+    let max = dts[0];
+    for (const x of dts) {
+      if (k(x) < k(min)) min = x;
+      if (k(x) > k(max)) max = x;
+    }
+    const d1 = parseDate(min.date);
+    const d2 = parseDate(max.date);
+    const days = d1 && d2 ? Math.round((d2 - d1) / 86400000) + 1 : 1;
+    return { min, max, days };
+  }, [todayRows]);
+
+  const spanText = orderSpan
+    ? `${orderSpan.min.date}${orderSpan.min.time ? ' ' + orderSpan.min.time : ''} ~ ${orderSpan.max.date}${orderSpan.max.time ? ' ' + orderSpan.max.time : ''} (총 ${orderSpan.days}일)`
+    : '';
+
   const byBusiness = groupByBusiness(todayRows);
 
   const dRev = fmtDelta(today.revenue, yesterday.revenue);
@@ -39,7 +69,8 @@ export default function DailyReport({ rows, dataRange }) {
 
   const reportText = useMemo(() => {
     const lines = [];
-    lines.push(`📊 일일 매출 보고 (${fmtKDate(parseDate(date))})`);
+    lines.push(`📊 일일 매출 보고 (발주일 ${fmtKDate(parseDate(date))})`);
+    if (spanText) lines.push(`주문수집: ${spanText}`);
     lines.push('');
     lines.push(`■ 매출 ${fmtKRW(today.revenue)}` + (dRev ? ` (전일比 ${dRev.label})` : ''));
     lines.push(`■ 매입 ${fmtKRW(today.cost)}`);
@@ -53,8 +84,13 @@ export default function DailyReport({ rows, dataRange }) {
     }
     lines.push('');
     lines.push(`▷ 월누계 ${fmtKRW(mtd.revenue)} / 순마진 ${fmtKRW(mtd.margin)} (${fmtPct(mtd.marginRate)})`);
+    lines.push('');
+    lines.push(
+      `▷ 주문마감: 기본 ${ORDER_CUTOFF_DEFAULT}` +
+        ORDER_CUTOFF_EXCEPTIONS.map((e) => ` / ${e.vendor} ${e.cutoff}`).join('')
+    );
     return lines.join('\n');
-  }, [date, today, yesterday, mtd, byBusiness, dRev, dMarg]);
+  }, [date, today, yesterday, mtd, byBusiness, dRev, dMarg, spanText]);
 
   const copyReport = () => {
     navigator.clipboard.writeText(reportText);
@@ -86,7 +122,24 @@ export default function DailyReport({ rows, dataRange }) {
       <div className="report-card">
         <div className="report-header">
           <h2>일일 매출 현황 보고</h2>
-          <div className="date">{fmtKDate(parseDate(date))}</div>
+          <div className="date">
+            발주일 {fmtKDate(parseDate(date))}
+            {spanText && (
+              <div style={{ fontSize: 12, marginTop: 2 }}>주문 수집 기간: {spanText}</div>
+            )}
+          </div>
+        </div>
+
+        <div className="report-section">
+          <div className="report-section-title">주문 마감 시각 안내</div>
+          <div style={{ fontSize: 13, lineHeight: 1.7 }}>
+            <div>· 기본: {ORDER_CUTOFF_DEFAULT} 마감</div>
+            {ORDER_CUTOFF_EXCEPTIONS.map((e) => (
+              <div key={e.vendor}>
+                · 예외 — <strong>{e.vendor}</strong>: 주문마감 {e.cutoff}
+              </div>
+            ))}
+          </div>
         </div>
 
         <div className="report-section">
