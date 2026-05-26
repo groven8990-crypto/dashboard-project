@@ -36,10 +36,14 @@ function guessPurchaseExempt(supplier) {
   return SUPPLIER_VAT_EXEMPT.test(String(supplier || ''));
 }
 
+const PAGE_SIZE = 50;
+
 export default function ManualEntry({ rows, onAdd, onDelete }) {
   const [form, setForm] = useState(EMPTY);
   const [editingIdx, setEditingIdx] = useState(null);
   const [suggestions, setSuggestions] = useState({});
+  const [listFilter, setListFilter] = useState({ from: '', to: '', q: '', business: '' });
+  const [page, setPage] = useState(0);
 
   const businesses = useMemo(() => getUniqueValues(rows, 'business'), [rows]);
   const suppliers = useMemo(() => getUniqueValues(rows, 'supplier'), [rows]);
@@ -186,7 +190,50 @@ export default function ManualEntry({ rows, onAdd, onDelete }) {
     setSuggestions({});
   };
 
-  const recent = rows.slice(-15).reverse();
+  const updateFilter = (patch) => {
+    setListFilter((f) => ({ ...f, ...patch }));
+    setPage(0);
+  };
+
+  // 전체 주문을 기간·검색·사업자로 필터링 (원본 인덱스 유지하여 수정/삭제 가능)
+  const filteredList = useMemo(() => {
+    const q = listFilter.q.trim().toLowerCase();
+    const out = [];
+    for (let idx = 0; idx < rows.length; idx++) {
+      const r = rows[idx];
+      if (listFilter.from && (r.date || '') < listFilter.from) continue;
+      if (listFilter.to && (r.date || '') > listFilter.to) continue;
+      if (listFilter.business && r.business !== listFilter.business) continue;
+      if (q) {
+        const hay = [r.product, r.spec, r.supplier, r.platform, r.recipient, r.phone, r.orderNo, r.note]
+          .filter(Boolean).join(' ').toLowerCase();
+        if (!hay.includes(q)) continue;
+      }
+      out.push({ r, idx });
+    }
+    out.sort((a, b) => (b.r.date || '').localeCompare(a.r.date || '') || b.idx - a.idx);
+    return out;
+  }, [rows, listFilter]);
+
+  const total = filteredList.length;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount - 1);
+  const pageRows = filteredList.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
+
+  const startEdit = (r, idx) => {
+    setForm({
+      date: r.date, business: r.business, taxType: r.taxType || '',
+      supplier: r.supplier || '', platform: r.platform || '',
+      product: r.product || '', spec: r.spec || '',
+      quantity: String(r.quantity || 1),
+      revenue: String(r.revenue), cost: String(r.cost),
+      shipping: String(r.shipping || 0), fee: String(r.fee || 0),
+      vat: String(r.vat || 0), purchaseExempt: null, note: r.note || ''
+    });
+    setEditingIdx(idx);
+    recomputeSuggestions({ product: r.product, spec: r.spec, platform: r.platform, supplier: r.supplier });
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   return (
     <div className="card">
@@ -446,62 +493,96 @@ export default function ManualEntry({ rows, onAdd, onDelete }) {
         </div>
       </form>
 
-      {recent.length > 0 && (
-        <div style={{ marginTop: 22 }}>
-          <div className="card-subtitle mb-8">최근 입력 (최대 15건)</div>
-          <div style={{ overflowX: 'auto' }}>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>날짜</th>
-                  <th>사업자</th>
-                  <th>판매처</th>
-                  <th>제품</th>
-                  <th>규격</th>
-                  <th>매출</th>
-                  <th>매입</th>
-                  <th>마진</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {recent.map((r, i) => {
-                  const realIdx = rows.length - 1 - i;
-                  const margin = r.revenue - r.cost - r.shipping - r.fee - r.vat;
-                  return (
-                    <tr key={realIdx}>
-                      <td>{r.date}</td>
-                      <td>{r.business}</td>
-                      <td>{r.platform}</td>
-                      <td>{r.product}</td>
-                      <td className="muted text-xs">{r.spec}</td>
-                      <td className="num">{fmtKRW(r.revenue)}</td>
-                      <td className="num">{fmtKRW(r.cost)}</td>
-                      <td className={`num ${margin >= 0 ? 'pos' : 'neg'}`}>{fmtKRW(margin)}</td>
-                      <td>
-                        <button className="btn sm" onClick={() => {
-                          setForm({
-                            date: r.date, business: r.business, taxType: r.taxType || '',
-                            supplier: r.supplier || '', platform: r.platform || '',
-                            product: r.product || '', spec: r.spec || '',
-                            quantity: String(r.quantity || 1),
-                            revenue: String(r.revenue), cost: String(r.cost),
-                            shipping: String(r.shipping || 0), fee: String(r.fee || 0),
-                            vat: String(r.vat || 0), note: r.note || ''
-                          });
-                          setEditingIdx(realIdx);
-                          recomputeSuggestions({ product: r.product, spec: r.spec, platform: r.platform, supplier: r.supplier });
-                        }}>수정</button>{' '}
-                        <button className="btn sm danger" onClick={() => onDelete(realIdx)}>삭제</button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+      <div style={{ marginTop: 22 }}>
+        <div className="card-header" style={{ marginBottom: 8 }}>
+          <div>
+            <div className="card-subtitle">
+              전체 주문 {rows.length.toLocaleString()}건 · 필터 결과 {total.toLocaleString()}건
+            </div>
+          </div>
+          <div className="filter-group" style={{ flexWrap: 'wrap', gap: 6 }}>
+            <input type="date" className="input" value={listFilter.from}
+              onChange={(e) => updateFilter({ from: e.target.value })} title="시작일" />
+            <span className="muted">~</span>
+            <input type="date" className="input" value={listFilter.to}
+              onChange={(e) => updateFilter({ to: e.target.value })} title="종료일" />
+            <select className="select" value={listFilter.business}
+              onChange={(e) => updateFilter({ business: e.target.value })}>
+              <option value="">전체 사업자</option>
+              {businesses.map((b) => <option key={b} value={b}>{b}</option>)}
+            </select>
+            <input className="input" placeholder="제품/매입처/수취인/주문번호 검색"
+              value={listFilter.q} onChange={(e) => updateFilter({ q: e.target.value })}
+              style={{ minWidth: 200 }} />
+            {(listFilter.from || listFilter.to || listFilter.q || listFilter.business) && (
+              <button className="btn" onClick={() => updateFilter({ from: '', to: '', q: '', business: '' })}>
+                필터 해제
+              </button>
+            )}
           </div>
         </div>
-      )}
+
+        {total === 0 ? (
+          <p className="muted" style={{ fontSize: 13 }}>표시할 주문이 없습니다.</p>
+        ) : (
+          <>
+            <div style={{ overflowX: 'auto' }}>
+              <table className="table" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
+                <thead>
+                  <tr>
+                    <th>날짜</th>
+                    <th>사업자</th>
+                    <th>과세</th>
+                    <th>매입처</th>
+                    <th>판매처</th>
+                    <th>제품</th>
+                    <th>규격</th>
+                    <th style={{ textAlign: 'right' }}>수량</th>
+                    <th style={{ textAlign: 'right' }}>매출</th>
+                    <th style={{ textAlign: 'right' }}>매입</th>
+                    <th style={{ textAlign: 'right' }}>부가세</th>
+                    <th style={{ textAlign: 'right' }}>마진</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pageRows.map(({ r, idx }) => {
+                    const margin = r.revenue - r.cost - (r.shipping || 0) - (r.fee || 0) - (r.vat || 0);
+                    return (
+                      <tr key={idx} style={{ background: editingIdx === idx ? 'var(--primary-soft)' : undefined }}>
+                        <td>{r.date}</td>
+                        <td>{r.business}</td>
+                        <td className="muted">{r.taxType || ''}</td>
+                        <td>{r.supplier || ''}</td>
+                        <td>{r.platform || ''}</td>
+                        <td>{r.product || ''}</td>
+                        <td className="muted">{r.spec || ''}</td>
+                        <td className="num">{r.quantity || 1}</td>
+                        <td className="num">{fmtKRW(r.revenue)}</td>
+                        <td className="num">{fmtKRW(r.cost)}</td>
+                        <td className="num">{fmtKRW(r.vat || 0)}</td>
+                        <td className={`num ${margin >= 0 ? 'pos' : 'neg'}`}>{fmtKRW(margin)}</td>
+                        <td style={{ whiteSpace: 'nowrap' }}>
+                          <button className="btn sm" onClick={() => startEdit(r, idx)}>수정</button>{' '}
+                          <button className="btn sm danger" onClick={() => onDelete(idx)}>삭제</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {pageCount > 1 && (
+              <div className="row" style={{ marginTop: 10, alignItems: 'center', gap: 8 }}>
+                <button className="btn sm" disabled={safePage === 0} onClick={() => setPage(safePage - 1)}>← 이전</button>
+                <span className="muted text-xs">{safePage + 1} / {pageCount} 페이지</span>
+                <button className="btn sm" disabled={safePage >= pageCount - 1} onClick={() => setPage(safePage + 1)}>다음 →</button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
 
       <style>{`
         .form-grid {
