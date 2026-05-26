@@ -1,0 +1,233 @@
+import React, { useMemo, useState } from 'react';
+import { fmtKRW, fmtNum } from '../utils/format.js';
+
+function fmt(n) {
+  return Math.round(n || 0).toLocaleString('ko-KR');
+}
+
+export default function SupplierLedger({ rows, range, onRangeChange }) {
+  const [selectedSupplier, setSelectedSupplier] = useState('');
+  const [sortField, setSortField] = useState('date');
+  const [sortAsc, setSortAsc] = useState(false);
+
+  const suppliers = useMemo(() => {
+    const set = new Set();
+    for (const r of rows) if (r.supplier) set.add(r.supplier);
+    return Array.from(set).sort();
+  }, [rows]);
+
+  // Summary by supplier (across full filtered rows)
+  const summaryBySupplier = useMemo(() => {
+    const map = new Map();
+    for (const r of rows) {
+      const s = r.supplier || '(미지정)';
+      if (!map.has(s)) {
+        map.set(s, { supplier: s, orders: 0, revenue: 0, cost: 0, purchaseShipping: 0, fee: 0 });
+      }
+      const g = map.get(s);
+      g.orders++;
+      g.revenue += r.revenue || 0;
+      g.cost += r.cost || 0;
+      g.purchaseShipping += r.purchaseShipping || 0;
+      g.fee += r.fee || 0;
+    }
+    return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue);
+  }, [rows]);
+
+  // Detail rows for selected supplier
+  const detailRows = useMemo(() => {
+    const base = selectedSupplier
+      ? rows.filter((r) => r.supplier === selectedSupplier)
+      : rows;
+
+    const field = sortField;
+    return [...base].sort((a, b) => {
+      const av = a[field] ?? '';
+      const bv = b[field] ?? '';
+      if (typeof av === 'number') return sortAsc ? av - bv : bv - av;
+      return sortAsc
+        ? String(av).localeCompare(String(bv), 'ko')
+        : String(bv).localeCompare(String(av), 'ko');
+    });
+  }, [rows, selectedSupplier, sortField, sortAsc]);
+
+  const detailTotals = useMemo(() => {
+    return detailRows.reduce(
+      (s, r) => ({
+        orders: s.orders + 1,
+        revenue: s.revenue + (r.revenue || 0),
+        cost: s.cost + (r.cost || 0),
+        purchaseShipping: s.purchaseShipping + (r.purchaseShipping || 0),
+        fee: s.fee + (r.fee || 0)
+      }),
+      { orders: 0, revenue: 0, cost: 0, purchaseShipping: 0, fee: 0 }
+    );
+  }, [detailRows]);
+
+  const toggleSort = (field) => {
+    if (sortField === field) setSortAsc((v) => !v);
+    else { setSortField(field); setSortAsc(false); }
+  };
+  const sortIcon = (field) => sortField === field ? (sortAsc ? ' ▲' : ' ▼') : '';
+
+  return (
+    <>
+      {/* 거래처 요약 카드 */}
+      <div className="card">
+        <div className="card-header">
+          <div>
+            <div className="card-title">🧾 거래처별 정산 요약</div>
+            <div className="card-subtitle">
+              총 {summaryBySupplier.length}개 거래처 · 매입 배송비는 거래처 청구액 대조용
+            </div>
+          </div>
+        </div>
+        <div style={{ overflowX: 'auto' }}>
+          <table className="table">
+            <thead>
+              <tr>
+                <th>거래처</th>
+                <th>주문건수</th>
+                <th>주문금액(합)</th>
+                <th>매입가(합)</th>
+                <th>매입 배송비</th>
+                <th>수수료(합)</th>
+                <th>추정 마진</th>
+              </tr>
+            </thead>
+            <tbody>
+              {summaryBySupplier.map((s) => {
+                const margin = s.revenue - s.cost - s.purchaseShipping - s.fee;
+                return (
+                  <tr
+                    key={s.supplier}
+                    style={{
+                      cursor: 'pointer',
+                      background: selectedSupplier === s.supplier ? 'var(--primary-soft)' : undefined
+                    }}
+                    onClick={() =>
+                      setSelectedSupplier((prev) => (prev === s.supplier ? '' : s.supplier))
+                    }
+                  >
+                    <td>
+                      <strong style={{ color: selectedSupplier === s.supplier ? 'var(--primary)' : undefined }}>
+                        {s.supplier}
+                      </strong>
+                    </td>
+                    <td className="num">{fmtNum(s.orders)}</td>
+                    <td className="num">{fmt(s.revenue)}</td>
+                    <td className="num">{fmt(s.cost)}</td>
+                    <td className="num" style={{ color: s.purchaseShipping > 0 ? 'var(--warning)' : undefined }}>
+                      {fmt(s.purchaseShipping)}
+                    </td>
+                    <td className="num">{fmt(s.fee)}</td>
+                    <td className={`num ${margin >= 0 ? 'pos' : 'neg'}`}>{fmt(margin)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {summaryBySupplier.length > 0 && (
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6, padding: '0 4px' }}>
+            * 행을 클릭하면 아래에서 해당 거래처의 주문 세부내역을 확인할 수 있습니다.
+          </div>
+        )}
+      </div>
+
+      {/* 세부내역 테이블 */}
+      <div className="card">
+        <div className="card-header">
+          <div>
+            <div className="card-title">
+              📋 주문 세부내역
+              {selectedSupplier && (
+                <span style={{ marginLeft: 8, fontWeight: 400, color: 'var(--primary)' }}>
+                  — {selectedSupplier}
+                </span>
+              )}
+            </div>
+            <div className="card-subtitle">
+              {detailRows.length.toLocaleString()}건 · 매입 배송비를 거래처 청구서와 대조하세요
+            </div>
+          </div>
+          <div className="filter-group">
+            <select
+              className="select"
+              value={selectedSupplier}
+              onChange={(e) => setSelectedSupplier(e.target.value)}
+            >
+              <option value="">전체 거래처</option>
+              {suppliers.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+            {selectedSupplier && (
+              <button className="btn" onClick={() => setSelectedSupplier('')}>
+                전체 보기
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div style={{ overflowX: 'auto' }}>
+          <table className="table">
+            <thead>
+              <tr>
+                <th style={{ cursor: 'pointer' }} onClick={() => toggleSort('date')}>날짜{sortIcon('date')}</th>
+                <th>거래처</th>
+                <th style={{ cursor: 'pointer' }} onClick={() => toggleSort('product')}>제품명{sortIcon('product')}</th>
+                <th>규격</th>
+                <th style={{ cursor: 'pointer', textAlign: 'right' }} onClick={() => toggleSort('quantity')}>수량{sortIcon('quantity')}</th>
+                <th style={{ cursor: 'pointer', textAlign: 'right' }} onClick={() => toggleSort('revenue')}>주문금액{sortIcon('revenue')}</th>
+                <th style={{ cursor: 'pointer', textAlign: 'right' }} onClick={() => toggleSort('cost')}>매입가{sortIcon('cost')}</th>
+                <th style={{ cursor: 'pointer', textAlign: 'right' }} onClick={() => toggleSort('purchaseShipping')}>매입 배송비{sortIcon('purchaseShipping')}</th>
+                <th style={{ textAlign: 'right' }}>수수료</th>
+                <th>주문번호</th>
+                <th>판매처</th>
+                <th>사업자</th>
+              </tr>
+            </thead>
+            <tbody>
+              {detailRows.map((r, i) => (
+                <tr key={r.orderNo || i}>
+                  <td style={{ whiteSpace: 'nowrap' }}>{r.date}</td>
+                  <td>{r.supplier || '—'}</td>
+                  <td>{r.product || '—'}</td>
+                  <td style={{ color: 'var(--muted)', fontSize: 12 }}>{r.spec || ''}</td>
+                  <td className="num">{r.quantity || 1}</td>
+                  <td className="num">{fmt(r.revenue)}</td>
+                  <td className="num" style={{ color: r.cost > 0 ? undefined : 'var(--muted)' }}>
+                    {r.cost > 0 ? fmt(r.cost) : '—'}
+                  </td>
+                  <td className="num" style={{ color: (r.purchaseShipping || 0) > 0 ? 'var(--warning)' : 'var(--muted)' }}>
+                    {(r.purchaseShipping || 0) > 0 ? fmt(r.purchaseShipping) : '—'}
+                  </td>
+                  <td className="num">{r.fee > 0 ? fmt(r.fee) : '—'}</td>
+                  <td style={{ fontSize: 11, color: 'var(--muted)', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {r.orderNo || ''}
+                  </td>
+                  <td style={{ fontSize: 12 }}>{r.platform || ''}</td>
+                  <td style={{ fontSize: 12 }}>{r.business || ''}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colSpan={4}><strong>합계 ({detailTotals.orders.toLocaleString()}건)</strong></td>
+                <td className="num"><strong>{fmt(detailRows.reduce((s, r) => s + (r.quantity || 1), 0))}</strong></td>
+                <td className="num"><strong>{fmt(detailTotals.revenue)}</strong></td>
+                <td className="num"><strong>{fmt(detailTotals.cost)}</strong></td>
+                <td className="num" style={{ color: detailTotals.purchaseShipping > 0 ? 'var(--warning)' : undefined }}>
+                  <strong>{fmt(detailTotals.purchaseShipping)}</strong>
+                </td>
+                <td className="num"><strong>{fmt(detailTotals.fee)}</strong></td>
+                <td colSpan={3} />
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </>
+  );
+}

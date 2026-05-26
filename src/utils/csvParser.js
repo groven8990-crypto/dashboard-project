@@ -322,11 +322,13 @@ function parseRawOrderSheet(json, headerIdx) {
       shortenProductName(pName, store);
 
     const qty = c.qty >= 0 ? parseNumber(r[c.qty]) || 1 : 1;
-    // 주문금액 = 총주문금액(AB) − 할인금액(AI) + 배송비(AH)
+    // AH열 = 매입 배송비 (거래처 정산용). 고객 주문금액에는 이미 배송비가 포함돼 있음.
+    const purchaseShipping = c.shipping >= 0 ? parseNumber(r[c.shipping]) : 0;
+    // 주문금액 = 총주문금액(AB) − 할인금액(AI) + 매입배송비(AH)
     const revenue =
       (c.total >= 0 ? parseNumber(r[c.total]) : 0) -
       (c.discount >= 0 ? parseNumber(r[c.discount]) : 0) +
-      (c.shipping >= 0 ? parseNumber(r[c.shipping]) : 0);
+      purchaseShipping;
 
     rows.push({
       date: toISODate(orderDate),
@@ -341,6 +343,7 @@ function parseRawOrderSheet(json, headerIdx) {
       revenue,
       cost: 0,
       shipping: 0,
+      purchaseShipping,
       fee: c.fee >= 0 ? parseNumber(r[c.fee]) : 0,
       vat: 0,
       labor: 0,
@@ -484,6 +487,7 @@ export function exportCSV(rows) {
       주문금액: r.revenue,
       매입가: r.cost,
       배송비: r.shipping,
+      매입배송비: r.purchaseShipping || 0,
       판매수수료: r.fee,
       부가세: r.vat,
       인건비: r.labor,

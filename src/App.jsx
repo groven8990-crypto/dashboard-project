@@ -12,6 +12,7 @@ import DayOverDay from './components/DayOverDay.jsx';
 import FormatGuide from './components/FormatGuide.jsx';
 import ProductAnalysis from './components/ProductAnalysis.jsx';
 import SupplierAnalysis from './components/SupplierAnalysis.jsx';
+import SupplierLedger from './components/SupplierLedger.jsx';
 import CloudSync from './components/CloudSync.jsx';
 import AdCostManager from './components/AdCostManager.jsx';
 import { createSyncManager, getCloudConfig } from './utils/cloudSync.js';
@@ -220,6 +221,7 @@ export default function App() {
         <button className={`tab ${tab === 'compare' ? 'active' : ''}`} onClick={() => setTab('compare')}>🏢 사업자·채널</button>
         <button className={`tab ${tab === 'product' ? 'active' : ''}`} onClick={() => setTab('product')}>📦 제품 분석</button>
         <button className={`tab ${tab === 'supplier' ? 'active' : ''}`} onClick={() => setTab('supplier')}>🏭 매입처 분석</button>
+        <button className={`tab ${tab === 'ledger' ? 'active' : ''}`} onClick={() => setTab('ledger')}>🧾 거래처 정산</button>
         <button className={`tab ${tab === 'daily' ? 'active' : ''}`} onClick={() => setTab('daily')}>📋 매출 보고</button>
         <button className={`tab ${tab === 'data' ? 'active' : ''}`} onClick={() => setTab('data')}>📥 데이터 관리</button>
       </nav>
@@ -289,6 +291,10 @@ export default function App() {
             <KPICards current={currentAgg} previous={previousAgg} />
             <SupplierAnalysis rows={filtered} />
           </>
+        )}
+
+        {hasData && tab === 'ledger' && (
+          <SupplierLedger rows={filtered} />
         )}
 
         {hasData && tab === 'daily' && (
