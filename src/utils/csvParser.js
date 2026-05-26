@@ -49,19 +49,60 @@ function parseAccountAlias(alias) {
   };
 }
 
+// 자주 취급하는 제품의 표준(짧은) 이름 사전.
+// 원본 상품명(P열)/옵션(Q·R열)에서 이 키워드가 발견되면 그 짧은 이름으로 정규화한다.
+// 신규 품목이 생기면 여기에 추가하면 됩니다. (판매자상품코드의 한글 제품명도 자동 보강됨)
+const PRODUCT_KEYWORDS = [
+  '간고등어', '부세굴비', '꿀밤고구마', '초당옥수수', '백찰옥수수', '찰옥수수',
+  '가시오이', '실비김치', '포켓누룽지', '경추베개', '손선풍기', '쑥개떡',
+  '박대', '서대', '굴비', '고구마', '오이', '옥수수', '김치', '누룽지',
+  '오렌지', '키캡', '베개', '선풍기', '고등어', '갈치', '새우', '오징어'
+];
+
+function hasHangul(s) {
+  return /[가-힣]/.test(String(s || ''));
+}
+
 // "일비]박대/100g-10" → { supplier: '일비', product: '박대' }
-// "도매꾹]63503778" → { supplier: '도매꾹', product: '' } (숫자코드는 제품명으로 안씀)
-// "m202604077a8908c4d" → { supplier: '', product: '' }
+// "늘푸른-백찰옥수수_260413" → { supplier: '늘푸른', product: '백찰옥수수' }
+// "도매꾹]63503778", "m202604077a8908c4d", "" → 제품명 없음(해시/숫자 코드)
 function parseSellerCode(code) {
   const s = String(code || '').trim();
+  let supplier = '';
+  let rest = '';
   const bi = s.indexOf(']');
-  if (bi === -1) return { supplier: '', product: '' };
-  const supplier = s.slice(0, bi).trim();
-  let rest = s.slice(bi + 1).trim();
-  const slash = rest.indexOf('/');
-  if (slash >= 0) rest = rest.slice(0, slash).trim();
-  const product = /^\d+$/.test(rest) ? '' : rest;
+  if (bi >= 0) {
+    supplier = s.slice(0, bi).trim();
+    rest = s.slice(bi + 1);
+  } else {
+    const di = s.indexOf('-');
+    if (di >= 0 && hasHangul(s.slice(di + 1))) {
+      supplier = s.slice(0, di).trim();
+      rest = s.slice(di + 1);
+    } else {
+      rest = s;
+    }
+  }
+  rest = rest.split(/[/_]/)[0].trim();
+  const product = hasHangul(rest) ? rest : '';
   return { supplier, product };
+}
+
+// 키워드 사전(길이순 내림차순)으로 텍스트들을 훑어 가장 구체적인 제품명을 찾는다.
+function matchProductKeyword(keywords, texts) {
+  for (const kw of keywords) {
+    for (const t of texts) {
+      if (t && t.includes(kw)) return kw;
+    }
+  }
+  return '';
+}
+
+// 키워드로도 못 찾을 때: 상호 접두 제거 후 앞 2어절만 사용해 짧게
+function shortenProductName(name, store) {
+  let s = String(name || '').trim();
+  if (store && s.startsWith(store)) s = s.slice(store.length).trim();
+  return s.split(/\s+/).slice(0, 2).join(' ');
 }
 
 // 헤더 별칭 → 표준 필드 매핑
@@ -237,38 +278,57 @@ function parseRawOrderSheet(json, headerIdx) {
     date: idx('주문일시'),
     alias: idx('별칭(쇼핑몰계정)'),
     productName: idx('상품명'),
+    optionName: idx('노출옵션명(쿠팡)'),
     spec: idx('선택사항'),
     code: idx('판매자상품코드'),
     qty: idx('수량'),
     unit: idx('단가'),
-    revenue: idx('총주문금액'),
+    total: idx('총주문금액'),
+    discount: idx('할인금액'),
     fee: idx('마켓수수료금액'),
     shipping: idx('배송비'),
     orderNo: idx('주문번호')
   };
 
-  const rows = [];
+  const dataRows = [];
   for (let i = headerIdx + 1; i < json.length; i++) {
     const r = json[i] || [];
-    const orderDate = parseDate(c.date >= 0 ? r[c.date] : '');
-    if (!orderDate) continue;
+    if (parseDate(c.date >= 0 ? r[c.date] : '')) dataRows.push(r);
+  }
 
+  // 1차: 판매자상품코드의 한글 제품명을 사전에 보강 → 길이순 내림차순 정렬
+  const keywordSet = new Set(PRODUCT_KEYWORDS);
+  for (const r of dataRows) {
+    const { product } = parseSellerCode(c.code >= 0 ? r[c.code] : '');
+    if (product) keywordSet.add(product);
+  }
+  const keywords = [...keywordSet].sort((a, b) => b.length - a.length);
+
+  // 2차: 행별 파싱 (제품명은 P/Q/R 분석 우선)
+  const rows = [];
+  for (const r of dataRows) {
+    const orderDate = parseDate(c.date >= 0 ? r[c.date] : '');
     const { platform, store } = parseAccountAlias(c.alias >= 0 ? r[c.alias] : '');
     const { supplier, product: codeProduct } = parseSellerCode(c.code >= 0 ? r[c.code] : '');
     const business = STORE_TO_BUSINESS[store] || store || '미지정';
 
-    let product = codeProduct;
-    if (!product) {
-      product = String(c.productName >= 0 ? r[c.productName] : '').trim();
-      if (store && product.startsWith(store)) product = product.slice(store.length).trim();
-    }
+    const pName = String(c.productName >= 0 ? r[c.productName] : '');
+    const qName = String(c.optionName >= 0 ? r[c.optionName] : '');
+    const rName = String(c.spec >= 0 ? r[c.spec] : '');
+    // 상품코드가 틀린 경우가 많아 상품명(P)·옵션(Q·R) 분석을 우선
+    const product =
+      matchProductKeyword(keywords, [pName, qName, rName]) ||
+      codeProduct ||
+      shortenProductName(pName, store);
 
     const qty = c.qty >= 0 ? parseNumber(r[c.qty]) || 1 : 1;
+    // 주문금액 = 총주문금액(AB) − 할인금액(AI) + 배송비(AH)
     const revenue =
-      (c.revenue >= 0 ? parseNumber(r[c.revenue]) : 0) ||
-      (c.unit >= 0 ? parseNumber(r[c.unit]) * qty : 0);
+      (c.total >= 0 ? parseNumber(r[c.total]) : 0) -
+      (c.discount >= 0 ? parseNumber(r[c.discount]) : 0) +
+      (c.shipping >= 0 ? parseNumber(r[c.shipping]) : 0);
 
-    const order = {
+    rows.push({
       date: toISODate(orderDate),
       dispatchDate: '',
       business,
@@ -276,19 +336,18 @@ function parseRawOrderSheet(json, headerIdx) {
       supplier,
       platform,
       product,
-      spec: c.spec >= 0 ? String(r[c.spec] || '').trim() : '',
+      spec: rName.trim(),
       quantity: qty,
       revenue,
       cost: 0,
-      shipping: c.shipping >= 0 ? parseNumber(r[c.shipping]) : 0,
+      shipping: 0,
       fee: c.fee >= 0 ? parseNumber(r[c.fee]) : 0,
       vat: 0,
       labor: 0,
       ad: 0,
       orderNo: c.orderNo >= 0 ? String(r[c.orderNo] || '').trim() : '',
       note: ''
-    };
-    rows.push(order);
+    });
   }
   return rows;
 }
