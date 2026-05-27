@@ -163,7 +163,10 @@ export default function ManualEntry({ rows, onAdd, onDelete, onBulkSetDispatch, 
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    // 수정 시 폼에 없는 필드(수취인·연락처·주소·주문번호·송장 등)는 원본 값 유지
+    const base = (editingIdx !== null && editingIdx !== undefined) ? (rows[editingIdx] || {}) : {};
     const row = {
+      ...base,
       date: form.date,
       orderTime: form.orderTime || '',
       dispatchDate: form.dispatchDate || '',
@@ -179,8 +182,8 @@ export default function ManualEntry({ rows, onAdd, onDelete, onBulkSetDispatch, 
       shipping: Number(form.shipping) || 0,
       fee: Number(form.fee) || 0,
       vat: Number(form.vat) || 0,
-      labor: 0,
-      ad: 0,
+      labor: base.labor || 0,
+      ad: base.ad || 0,
       note: form.note.trim()
     };
     onAdd(row, editingIdx);
@@ -619,6 +622,9 @@ export default function ManualEntry({ rows, onAdd, onDelete, onBulkSetDispatch, 
                     <th style={{ textAlign: 'right' }}>매입배송비</th>
                     <th style={{ textAlign: 'right' }}>부가세</th>
                     <th style={{ textAlign: 'right' }}>마진</th>
+                    <th>수취인</th>
+                    <th>연락처</th>
+                    <th>주소</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -648,6 +654,9 @@ export default function ManualEntry({ rows, onAdd, onDelete, onBulkSetDispatch, 
                         </td>
                         <td className="num">{fmtKRW(r.vat || 0)}</td>
                         <td className={`num ${margin >= 0 ? 'pos' : 'neg'}`}>{fmtKRW(margin)}</td>
+                        <td>{r.recipient || '—'}</td>
+                        <td className="muted">{r.phone || '—'}</td>
+                        <td style={{ whiteSpace: 'normal', maxWidth: 240, color: 'var(--muted)' }} title={r.address || ''}>{r.address || '—'}</td>
                         <td style={{ whiteSpace: 'nowrap' }}>
                           <button className="btn sm" onClick={() => startEdit(r, idx)}>수정</button>{' '}
                           <button className="btn sm danger" onClick={() => { onDelete(idx); setSelected(new Set()); }}>삭제</button>
