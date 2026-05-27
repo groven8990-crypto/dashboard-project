@@ -17,11 +17,13 @@ import CsManager from './components/CsManager.jsx';
 import CloudSync from './components/CloudSync.jsx';
 import AdCostManager from './components/AdCostManager.jsx';
 import BizInfoManager from './components/BizInfoManager.jsx';
+import PriceTableManager from './components/PriceTableManager.jsx';
 import { normalizeSupplier } from './utils/csvParser.js';
 import { createSyncManager, getCloudConfig } from './utils/cloudSync.js';
 import { loadAdCosts, saveAdCosts, applyAdCosts } from './utils/adCosts.js';
 import { loadBizInfo, saveBizInfo } from './utils/bizInfo.js';
 import { loadCsInfo, saveCsInfo } from './utils/csInfo.js';
+import { loadPriceTable, savePriceTable, applyPriceTableToOrders } from './utils/priceTable.js';
 import { computeRowVat } from './utils/vat.js';
 import {
   aggregate,
@@ -66,6 +68,7 @@ export default function App() {
   const [adCosts, setAdCosts] = useState(loadAdCosts);
   const [bizInfo, setBizInfo] = useState(loadBizInfo);
   const [csInfo, setCsInfo] = useState(loadCsInfo);
+  const [priceTable, setPriceTable] = useState(loadPriceTable);
   const [tab, setTab] = useState('overview');
   const [dataView, setDataView] = useState('orders');
   const [reportView, setReportView] = useState('daily');
@@ -83,10 +86,12 @@ export default function App() {
   const adCostsRef = React.useRef(adCosts);
   const bizInfoRef = React.useRef(bizInfo);
   const csInfoRef = React.useRef(csInfo);
+  const priceTableRef = React.useRef(priceTable);
   React.useEffect(() => { rowsRef.current = rows; }, [rows]);
   React.useEffect(() => { adCostsRef.current = adCosts; }, [adCosts]);
   React.useEffect(() => { bizInfoRef.current = bizInfo; }, [bizInfo]);
   React.useEffect(() => { csInfoRef.current = csInfo; }, [csInfo]);
+  React.useEffect(() => { priceTableRef.current = priceTable; }, [priceTable]);
 
   // 클라우드 동기화 매니저 초기화
   React.useEffect(() => {
@@ -96,7 +101,8 @@ export default function App() {
         rows: rowsRef.current,
         adCosts: adCostsRef.current,
         bizInfo: bizInfoRef.current,
-        csInfo: csInfoRef.current
+        csInfo: csInfoRef.current,
+        priceTable: priceTableRef.current
       }),
       onStatus: setSyncStatus
     });
@@ -109,7 +115,7 @@ export default function App() {
     if (cfg && cfg.gistId) {
       syncManagerRef.current?.scheduleSync();
     }
-  }, [rows, adCosts, bizInfo, csInfo, initialized]);
+  }, [rows, adCosts, bizInfo, csInfo, priceTable, initialized]);
 
   // Persist rows
   useEffect(() => {
@@ -134,6 +140,11 @@ export default function App() {
   useEffect(() => {
     saveCsInfo(csInfo);
   }, [csInfo]);
+
+  // Persist 매입단가표
+  useEffect(() => {
+    savePriceTable(priceTable);
+  }, [priceTable]);
 
   const handleCsChange = (key, patch) => {
     if (!key) return;
@@ -241,6 +252,16 @@ export default function App() {
   const handleMergeUpdate = (mergedRows) => {
     setUndoSnapshot(rows);
     setRows(mergedRows);
+  };
+
+  // 단가표 기준으로 주문 매입가·매입배송비 채우기 (되돌리기 가능)
+  const handleApplyPriceTable = () => {
+    const res = applyPriceTableToOrders(rows, priceTable);
+    if (res.updated > 0) {
+      setUndoSnapshot(rows);
+      setRows(res.rows);
+    }
+    return res;
   };
 
   const handleManualAdd = (row, editingIdx) => {
@@ -444,6 +465,7 @@ export default function App() {
               <div className="filter-group">
                 <button className={`tab ${dataView === 'io' ? 'active' : ''}`} onClick={() => setDataView('io')}>📥 가져오기·내보내기·동기화</button>
                 <button className={`tab ${dataView === 'orders' ? 'active' : ''}`} onClick={() => setDataView('orders')}>📋 주문 관리</button>
+                <button className={`tab ${dataView === 'price' ? 'active' : ''}`} onClick={() => setDataView('price')}>💲 매입단가표</button>
                 <button className={`tab ${dataView === 'biz' ? 'active' : ''}`} onClick={() => setDataView('biz')}>🏢 거래처 정보</button>
               </div>
             </div>
@@ -461,12 +483,14 @@ export default function App() {
                   adCosts={adCosts}
                   bizInfo={bizInfo}
                   csInfo={csInfo}
-                  onPull={(pulledRows, newAdCosts, newBizInfo, newCsInfo) => {
+                  priceTable={priceTable}
+                  onPull={(pulledRows, newAdCosts, newBizInfo, newCsInfo, newPriceTable) => {
                     const newRows = migrateSuppliers(pulledRows);
                     setRows(newRows);
                     if (Array.isArray(newAdCosts)) setAdCosts(newAdCosts);
                     if (Array.isArray(newBizInfo)) setBizInfo(newBizInfo);
                     if (newCsInfo && typeof newCsInfo === 'object') setCsInfo(newCsInfo);
+                    if (Array.isArray(newPriceTable)) setPriceTable(newPriceTable);
                     if (newRows.length) {
                       const r = getDateRange(newRows);
                       setRange({ from: r.min, to: r.max });
@@ -486,6 +510,14 @@ export default function App() {
                 onDelete={handleManualDelete}
                 onBulkSetDispatch={handleBulkSetDispatch}
                 onAutoVat={handleAutoVat}
+              />
+            )}
+
+            {dataView === 'price' && (
+              <PriceTableManager
+                priceTable={priceTable}
+                onChange={setPriceTable}
+                onApplyToOrders={handleApplyPriceTable}
               />
             )}
 
