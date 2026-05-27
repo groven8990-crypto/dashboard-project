@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from 'react';
 import { fmtKRW, fmtNum } from '../utils/format.js';
-import { orderKey } from '../utils/csInfo.js';
 
 function fmt(n) {
   return Math.round(n || 0).toLocaleString('ko-KR');
@@ -193,10 +192,8 @@ export default function SupplierLedger({ rows }) {
               </tr>
             </thead>
             <tbody>
-              {detailRows.map((r, i) => {
-                const key = orderKey(r);
-                return (
-                  <tr key={key || i}>
+              {detailRows.map((r, i) => (
+                  <tr key={i}>
                     <td>
                       {r.date}
                       {r.orderTime ? <span style={{ color: 'var(--muted)', marginLeft: 4 }}>{r.orderTime}</span> : null}
@@ -225,8 +222,7 @@ export default function SupplierLedger({ rows }) {
                     <td style={{ color: 'var(--muted)' }}>{r.orderNo || ''}</td>
                     <td>{r.platform || ''}</td>
                   </tr>
-                );
-              })}
+              ))}
             </tbody>
             <tfoot>
               <tr>

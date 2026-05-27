@@ -32,11 +32,12 @@ export default function CsManager({ rows, csInfo = {}, onCsChange }) {
   // 각 주문행에 CS 정보를 결합
   const decorated = useMemo(
     () =>
-      rows.map((r) => {
+      rows.map((r, idx) => {
         const key = orderKey(r);
         const cs = csInfo[key] || {};
         return {
           r,
+          idx,
           key,
           status: cs.csStatus || '',
           invoice: cs.invoice !== undefined ? cs.invoice : (r.invoice || ''),
@@ -175,10 +176,10 @@ export default function CsManager({ rows, csInfo = {}, onCsChange }) {
               </tr>
             </thead>
             <tbody>
-              {pageRows.map(({ r, key, status, invoice, memo }, i) => {
+              {pageRows.map(({ r, idx, key, status, invoice, memo }) => {
                 const color = STATUS_COLOR[status];
                 return (
-                  <tr key={key || i}>
+                  <tr key={idx}>
                     <td>
                       {r.date}
                       {r.orderTime ? <span style={{ color: 'var(--muted)', marginLeft: 4 }}>{r.orderTime}</span> : null}
