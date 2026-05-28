@@ -187,14 +187,17 @@ export default function CsManager({ rows, csInfo = {}, onCsChange }) {
                     <td>{r.dispatchDate || '—'}</td>
                     <td>{r.business || '—'}</td>
                     <td>{r.platform || '—'}</td>
-                    <td style={{ whiteSpace: 'normal' }}>
+                    <td
+                      style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}
+                      title={`${r.product || ''}${r.spec ? ' · ' + r.spec : ''}`}
+                    >
                       {r.product || '—'}
                       {r.spec ? <span style={{ color: 'var(--muted)' }}> · {r.spec}</span> : null}
                     </td>
                     <td>{r.recipient || '—'}</td>
                     <td>{r.phone || '—'}</td>
                     <td
-                      style={{ whiteSpace: 'normal', maxWidth: 220, color: 'var(--muted)' }}
+                      style={{ maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--muted)' }}
                       title={r.address || ''}
                     >
                       {r.address || '—'}
