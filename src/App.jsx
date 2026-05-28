@@ -18,7 +18,6 @@ import CloudSync from './components/CloudSync.jsx';
 import AdCostManager from './components/AdCostManager.jsx';
 import BizInfoManager from './components/BizInfoManager.jsx';
 import PriceTableManager from './components/PriceTableManager.jsx';
-import SalesActivityLog from './components/SalesActivityLog.jsx';
 import { normalizeSupplier } from './utils/csvParser.js';
 import { createSyncManager, getCloudConfig } from './utils/cloudSync.js';
 import { loadAdCosts, saveAdCosts, applyAdCosts } from './utils/adCosts.js';
@@ -354,12 +353,11 @@ export default function App() {
         <button className={`tab ${tab === 'ledger' ? 'active' : ''}`} onClick={() => setTab('ledger')}>🧾 거래처 정산</button>
         <button className={`tab ${tab === 'cs' ? 'active' : ''}`} onClick={() => setTab('cs')}>🎧 CS 관리</button>
         <button className={`tab ${tab === 'daily' ? 'active' : ''}`} onClick={() => setTab('daily')}>📋 매출 보고</button>
-        <button className={`tab ${tab === 'activity' ? 'active' : ''}`} onClick={() => setTab('activity')}>📒 영업활동일지</button>
         <button className={`tab ${tab === 'data' ? 'active' : ''}`} onClick={() => setTab('data')}>📥 데이터 관리</button>
       </nav>
 
       <main className="main">
-        {!hasData && tab !== 'data' && tab !== 'activity' && (
+        {!hasData && tab !== 'data' && (
           <div className="empty-state">
             <h2>데이터가 아직 없습니다</h2>
             <p>먼저 데이터를 불러오거나 샘플 데이터를 로드해주세요.</p>
@@ -373,7 +371,7 @@ export default function App() {
           </div>
         )}
 
-        {hasData && tab !== 'data' && tab !== 'daily' && tab !== 'cs' && tab !== 'activity' && (
+        {hasData && tab !== 'data' && tab !== 'daily' && tab !== 'cs' && (
           <PeriodFilter
             granularity={granularity}
             onGranularityChange={setGranularity}
@@ -459,10 +457,6 @@ export default function App() {
               <MonthlyReport rows={effectiveRows} dataRange={dataRange} />
             )}
           </>
-        )}
-
-        {tab === 'activity' && (
-          <SalesActivityLog />
         )}
 
         {tab === 'data' && (
