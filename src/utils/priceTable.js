@@ -153,28 +153,52 @@ export function matchOrderPrice(priceRows, order) {
   }).sort((a, b) => b.score - a.score);
 
   const best = scored[0];
+  let priceConfirmed = true;
   if (best.score === 0) {
-    // 규격 단서가 없으면 후보가 유일할 때만 확정
-    if (cands.length !== 1) return null;
+    // 규격 단서가 없으면 후보가 유일할 때만 단가 확정
+    if (cands.length !== 1) priceConfirmed = false;
   } else {
-    // 동점 최상위들이 단가가 다르면 모호 → 보류
+    // 동점 최상위들이 단가가 다르면 모호 → 단가 보류
     const top = scored.filter((s) => s.score === best.score);
     const distinct = new Set(top.map((s) => Number(s.p.unitPrice) || 0));
-    if (distinct.size > 1) return null;
+    if (distinct.size > 1) priceConfirmed = false;
   }
-  return { unitPrice: Number(best.p.unitPrice) || 0, shipping: Number(best.p.inboundShip) || 0 };
+  // 발주처(매입처) 추론: 관련 후보들이 모두 같은 업체일 때만 확정.
+  // 코드가 깨져 매입처가 비어도 제품명만으로 업체를 메꿀 수 있음.
+  const supPool = best.score > 0 ? scored.filter((s) => s.score === best.score).map((s) => s.p) : cands;
+  const sups = new Set(supPool.map((p) => normalizeSupplier(p.supplier)).filter(Boolean));
+  const supplier = sups.size === 1 ? [...sups][0] : '';
+  if (!priceConfirmed && !supplier) return null;
+  return {
+    unitPrice: priceConfirmed ? (Number(best.p.unitPrice) || 0) : null,
+    shipping: priceConfirmed ? (Number(best.p.inboundShip) || 0) : null,
+    supplier
+  };
 }
 
-// 단가표 기준으로 주문들의 매입가·매입배송비 채우기. 반환 { rows, updated, matched }
+// 단가표 기준으로 주문들의 매입가·매입배송비 채우기 + 발주처(매입처)가 비면 메꾸기.
+// 반환 { rows, updated, matched }
 export function applyPriceTableToOrders(orders, priceRows) {
   let updated = 0, matched = 0;
   const rows = orders.map((o) => {
     const m = matchOrderPrice(priceRows, o);
     if (!m) return o;
     matched++;
-    if ((o.cost || 0) === m.unitPrice && (o.shipping || 0) === m.shipping) return o;
+    const next = { ...o };
+    let changed = false;
+    if (m.unitPrice != null && ((o.cost || 0) !== m.unitPrice || (o.shipping || 0) !== (m.shipping || 0))) {
+      next.cost = m.unitPrice;
+      next.shipping = m.shipping || 0;
+      changed = true;
+    }
+    // 매입처는 비어 있을 때만 채움 (코드에서 읽은 값은 덮어쓰지 않음)
+    if (!o.supplier && m.supplier) {
+      next.supplier = m.supplier;
+      changed = true;
+    }
+    if (!changed) return o;
     updated++;
-    return { ...o, cost: m.unitPrice, shipping: m.shipping };
+    return next;
   });
   return { rows, updated, matched };
 }
