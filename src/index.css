@@ -232,6 +232,23 @@ input, select, textarea {
   gap: 16px;
 }
 
+/* 영업활동일지 입력 폼 그리드 */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px 14px;
+}
+.form-grid .input,
+.form-grid .select,
+.form-grid textarea.input {
+  width: 100%;
+}
+.form-grid textarea.input {
+  resize: vertical;
+  font-size: 13px;
+  padding: 8px 10px;
+}
+
 /* Table */
 .table {
   width: 100%;
