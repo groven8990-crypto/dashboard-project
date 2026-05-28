@@ -137,6 +137,7 @@ const FIELD_ALIASES = {
   taxType: ['과세', '과세구분', '면세과세'],
   supplier: ['매입처', '공급처', '거래처', '발주처'],
   orderDate: ['주문일시', '주문일', '주문일자', '판매일', '거래일', '일자', '날짜'],
+  orderTime: ['주문시간', '주문시각', '주문시', '시각'],
   dispatchDate: ['발주일자', '발주일', '발주일시'],
   weekday: ['요일'],
   platform: ['판매처', '채널', '판매채널', '플랫폼', '쇼핑몰'],
@@ -269,7 +270,9 @@ function parseSheet(ws, sheetName) {
 
     const order = {
       date: toISODate(orderDate),
-      orderTime: colMap.orderDate !== undefined ? extractTime(r[colMap.orderDate]) : '',
+      orderTime:
+        (colMap.orderTime !== undefined && extractTime(r[colMap.orderTime]))
+        || (colMap.orderDate !== undefined ? extractTime(r[colMap.orderDate]) : ''),
       dispatchDate: colMap.dispatchDate !== undefined
         ? (parseDate(r[colMap.dispatchDate]) ? toISODate(parseDate(r[colMap.dispatchDate])) : '')
         : '',
