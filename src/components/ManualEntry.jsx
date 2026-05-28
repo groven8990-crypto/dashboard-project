@@ -644,7 +644,7 @@ export default function ManualEntry({ rows, onAdd, onDelete, onBulkSetDispatch, 
                         <td className="muted">{r.taxType || ''}</td>
                         <td>{r.supplier || ''}</td>
                         <td>{r.platform || ''}</td>
-                        <td>{r.product || ''}</td>
+                        <td style={{ maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis' }} title={r.product || ''}>{r.product || ''}</td>
                         <td className="muted">{r.spec || ''}</td>
                         <td className="num">{qty}</td>
                         <td className="num">{fmtKRW(r.revenue)}</td>
@@ -656,7 +656,7 @@ export default function ManualEntry({ rows, onAdd, onDelete, onBulkSetDispatch, 
                         <td className={`num ${margin >= 0 ? 'pos' : 'neg'}`}>{fmtKRW(margin)}</td>
                         <td>{r.recipient || '—'}</td>
                         <td className="muted">{r.phone || '—'}</td>
-                        <td style={{ whiteSpace: 'normal', maxWidth: 240, color: 'var(--muted)' }} title={r.address || ''}>{r.address || '—'}</td>
+                        <td style={{ maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--muted)' }} title={r.address || ''}>{r.address || '—'}</td>
                         <td style={{ whiteSpace: 'nowrap' }}>
                           <button className="btn sm" onClick={() => startEdit(r, idx)}>수정</button>{' '}
                           <button className="btn sm danger" onClick={() => { onDelete(idx); setSelected(new Set()); }}>삭제</button>
