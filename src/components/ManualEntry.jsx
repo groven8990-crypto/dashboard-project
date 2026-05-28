@@ -645,7 +645,7 @@ export default function ManualEntry({ rows, onAdd, onDelete, onBulkSetDispatch, 
                         <td>{r.supplier || ''}</td>
                         <td>{r.platform || ''}</td>
                         <td style={{ maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis' }} title={r.product || ''}>{r.product || ''}</td>
-                        <td className="muted">{r.spec || ''}</td>
+                        <td className="muted" style={{ maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis' }} title={r.spec || ''}>{r.spec || ''}</td>
                         <td className="num">{qty}</td>
                         <td className="num">{fmtKRW(r.revenue)}</td>
                         <td className="num">{fmtKRW(r.cost)}</td>

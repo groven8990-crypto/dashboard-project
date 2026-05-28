@@ -201,7 +201,7 @@ export default function SupplierLedger({ rows }) {
                     <td>{r.dispatchDate || '—'}</td>
                     <td>{r.supplier || '—'}</td>
                     <td style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis' }} title={r.product || ''}>{r.product || '—'}</td>
-                    <td style={{ color: 'var(--muted)' }}>{r.spec || ''}</td>
+                    <td style={{ color: 'var(--muted)', maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis' }} title={r.spec || ''}>{r.spec || ''}</td>
                     <td className="num">{r.quantity || 1}</td>
                     <td className="num">{fmt(r.revenue)}</td>
                     <td className="num" style={{ color: r.cost > 0 ? undefined : 'var(--muted)' }}>
